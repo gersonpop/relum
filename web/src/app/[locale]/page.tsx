@@ -48,10 +48,10 @@ export default async function HomePage({params}: HomePageProps) {
             <LanguageSwitcher />
           </div>
 
-          <div className="flex flex-1 flex-col justify-center py-5 text-white md:hidden">
-            <Image src="/logo_icon.png" alt="" width={64} height={64} className="rounded-2xl" />
-            <h1 className="mt-4 text-4xl font-semibold tracking-tight">Relum</h1>
-            <p className="mt-2 max-w-xs text-lg leading-7 text-sky-100">{t("description")}</p>
+          <div className="flex flex-1 flex-col justify-center py-5 text-white md:hidden [@media(max-height:640px)]:py-2">
+            <Image src="/logo_icon.png" alt="" width={64} height={64} className="rounded-2xl [@media(max-height:640px)]:size-11" />
+            <h1 className="mt-4 text-4xl font-semibold tracking-tight [@media(max-height:640px)]:mt-2 [@media(max-height:640px)]:text-3xl">Relum</h1>
+            <p className="mt-2 max-w-xs text-lg leading-7 text-sky-100 [@media(max-height:640px)]:text-base [@media(max-height:560px)]:hidden">{t("description")}</p>
           </div>
 
           <div className="mt-4 hidden space-y-2 md:block lg:mt-5">

@@ -34,6 +34,22 @@ export function SocialAuthButtons({
         {googleLabel}
       </button>
 
+      {showMicrosoft ? (
+      <button
+        type="button"
+        onClick={() => signIn("azure-ad", {callbackUrl})}
+        className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/45 bg-white/18 text-sm font-semibold text-white transition hover:bg-white/28 lg:h-11"
+      >
+        <span aria-hidden="true" className="grid grid-cols-2 gap-px">
+          <span className="h-1.5 w-1.5 bg-white" />
+          <span className="h-1.5 w-1.5 bg-white" />
+          <span className="h-1.5 w-1.5 bg-white" />
+          <span className="h-1.5 w-1.5 bg-white" />
+        </span>
+        {microsoftLabel}
+      </button>
+      ) : null}
+
       <button
         type="button"
         onClick={() => signIn("facebook", {callbackUrl})}
@@ -52,21 +68,6 @@ export function SocialAuthButtons({
         {linkedInLabel}
       </button>
 
-      {showMicrosoft ? (
-      <button
-        type="button"
-        onClick={() => signIn("azure-ad", {callbackUrl})}
-        className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/45 bg-white/18 text-sm font-semibold text-white transition hover:bg-white/28 lg:h-11"
-      >
-        <span aria-hidden="true" className="grid grid-cols-2 gap-px">
-          <span className="h-1.5 w-1.5 bg-white" />
-          <span className="h-1.5 w-1.5 bg-white" />
-          <span className="h-1.5 w-1.5 bg-white" />
-          <span className="h-1.5 w-1.5 bg-white" />
-        </span>
-        {microsoftLabel}
-      </button>
-      ) : null}
 
       <p className="pt-1 text-center text-xs text-slate-100/90">{disclaimer}</p>
     </div>
