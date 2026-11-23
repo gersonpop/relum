@@ -28,7 +28,7 @@ export default async function PositionsPage({params}: PageProps) {
   return (
     <NewPagePattern
       title="Cargos"
-      description="Crea y administra los cargos de la aplicación desde BD usando API dinámica."
+      description="Crea los cargos de tu equipo, por ejemplo Técnico, Supervisor o Jefe de mantenimiento."
       plain={true}
     >
       <PositionsConfigClient actorId={actor.actorId} actorRole={actor.role} companyId={actor.companyId} />

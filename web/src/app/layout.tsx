@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FluidSell Web",
-  description: "Plataforma web multilenguaje de FluidSell",
+  title: "Relum",
+  description: "Relum: gestión de mantenimiento, órdenes de trabajo y reportes",
 };
 
 export default function RootLayout({

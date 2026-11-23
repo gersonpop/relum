@@ -365,7 +365,7 @@ export function CompanyManager({
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
             {isSU && adminAllCompanies
-              ? "Lista de todas las empresas dadas de alta en la plataforma FluidSell"
+              ? "Lista de todas las empresas dadas de alta en Relum"
               : "Visualiza y edita los datos comerciales e impositivos de tu empresa"}
           </p>
         </div>

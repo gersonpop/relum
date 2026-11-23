@@ -1343,7 +1343,7 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
                       <thead className="bg-slate-50 text-slate-500 font-semibold sticky top-0 border-b border-slate-200 select-none z-10">
                         <tr>
                           <th className="px-3 py-2 text-center w-12">Sel.</th>
-                          <th className="px-3 py-2">ID Clave</th>
+                          <th className="px-3 py-2">Sigla</th>
                           <th className="px-3 py-2">Nombre</th>
                           <th className="px-3 py-2">Alcance (Scope)</th>
                           <th className="px-3 py-2 text-center w-20">Descripción</th>

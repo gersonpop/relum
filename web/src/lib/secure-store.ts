@@ -28,7 +28,7 @@ function rc4(key: string, str: string): string {
   return res;
 }
 
-const DEFAULT_SALT = "fluidsell_secure_local_storage_default_salt_2026";
+const DEFAULT_SALT = "relum_secure_local_storage_default_salt_2026";
 
 /**
  * Derives a key by combining the system salt and an optional user identifier (actorId).

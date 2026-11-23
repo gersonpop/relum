@@ -101,7 +101,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   const [modulesList, setModulesList] = useState<any[]>([]);
   const sortedCompanies = useMemo(() => {
     const list = [...companies];
-    const idx = list.findIndex(c => String(c.commercialName || "").toLowerCase().includes("fluidsell"));
+    const idx = list.findIndex(c => String(c.commercialName || "").toLowerCase().includes("relum"));
     if (idx > -1) {
       const [fs] = list.splice(idx, 1);
       list.unshift(fs!);
@@ -348,7 +348,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
     () => {
       const cols = [
         {key: "id", label: "ID"},
-        {key: "key_id", label: "ID Clave"},
+        {key: "key_id", label: "Sigla"},
         {key: "name", label: "Nombre"},
         {key: "description", label: "Descripción"},
         {key: "scope", label: "Alcance (Scope)"}
@@ -626,8 +626,8 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   async function onSubmit() {
     const errors: Partial<Record<keyof typeof defaultForm, string>> = {};
     if (!form.name.trim()) errors.name = "Nombre del cargo es obligatorio";
-    if (!form.key_id.trim()) errors.key_id = "ID Clave es obligatorio";
-    if (form.key_id.trim().length > 5) errors.key_id = "ID Clave debe tener máximo 5 caracteres";
+    if (!form.key_id.trim()) errors.key_id = "Escribe una sigla";
+    if (form.key_id.trim().length > 5) errors.key_id = "La sigla debe tener máximo 5 letras";
     if (!form.scope.trim()) errors.scope = "Alcance es obligatorio";
     if (actorRole === "SU" && !form.company_id.trim()) errors.company_id = "Empresa es obligatoria para el Super Usuario";
 
@@ -731,7 +731,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
           ) : (
             <>
               <h2 className="text-2xl font-semibold">Administración de Cargos</h2>
-              <p className="text-sm text-slate-550">Crea y administra los cargos (roles) del sistema desde BD usando API dinámica.</p>
+              <p className="text-sm text-slate-550">Crea los cargos de tu equipo, por ejemplo Técnico, Supervisor o Jefe de mantenimiento.</p>
             </>
           )}
         </header>
@@ -745,7 +745,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Buscar por ID Clave, nombre o descripción..."
+                placeholder="Buscar por sigla, nombre o descripción…"
                 className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm"
               />
               <select
@@ -940,7 +940,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
 
             <div className="mt-4 space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">ID Clave (Max 5 letras, ej: ADM)</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Sigla (máximo 5 letras, ej.: TEC)</label>
                 <input
                   value={form.key_id}
                   disabled={!!editingId}

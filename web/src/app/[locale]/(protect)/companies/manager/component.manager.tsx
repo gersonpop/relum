@@ -76,7 +76,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
   const [sucursalesCache, setSucursalesCache] = useState<Record<string, any[]>>(() => {
     if (typeof window !== "undefined") {
       try {
-        const stored = sessionStorage.getItem("fluidsell_sucursales_cache");
+        const stored = sessionStorage.getItem("relum_sucursales_cache");
         return stored ? JSON.parse(stored) : {};
       } catch {
         return {};
@@ -87,7 +87,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      sessionStorage.setItem("fluidsell_sucursales_cache", JSON.stringify(sucursalesCache));
+      sessionStorage.setItem("relum_sucursales_cache", JSON.stringify(sucursalesCache));
     }
   }, [sucursalesCache]);
 
@@ -650,7 +650,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                           value={form.commercialName}
                           disabled={!isAdding && (!isEditing || !canEditCompany(currentDetailsRow?.id))}
                           onChange={(event) => setFormField("commercialName", event.target.value)}
-                          placeholder="Ej. FluidSell LatinAmerica"
+                          placeholder="Ej. Mantenimientos Andinos"
                           className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition duration-200 disabled:bg-slate-100/60 disabled:text-slate-500 disabled:cursor-not-allowed font-semibold"
                         />
                         {formErrors.commercialName ? <p className="text-xs text-red-500 mt-1">{formErrors.commercialName}</p> : null}
@@ -662,7 +662,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                           value={form.legalName}
                           disabled={!isAdding && (!isEditing || !canEditCompany(currentDetailsRow?.id))}
                           onChange={(event) => setFormField("legalName", event.target.value)}
-                          placeholder="Ej. FluidSell S.A.S."
+                          placeholder="Ej. Mantenimientos Andinos S.A.S."
                           className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition duration-200 disabled:bg-slate-100/60 disabled:text-slate-500 disabled:cursor-not-allowed font-semibold"
                         />
                       </label>

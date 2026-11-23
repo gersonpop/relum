@@ -21,12 +21,12 @@ export async function resolveUserContext(locale: string): Promise<ResolvedUserCo
     session = {
       user: {
         name: "Dev User",
-        email: "gerson.pop@fluidsell.com",
+        email: "dev@relum.app",
         image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&auto=format&fit=crop",
         role: "SU",
         roleScope: "SU",
         companyId: "900000000",
-        companyName: "FluidSell Dev",
+        companyName: "Relum Dev",
         userCargo: "Super Administrador",
         provider: "google"
       },

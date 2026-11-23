@@ -371,7 +371,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
             {/* Right: Company, DNI, Names (7/12) */}
             <div className="col-span-7 space-y-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200 mb-1">FluidSell</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200 mb-1">Relum</p>
                 <h1 className="text-xl font-semibold leading-7 tracking-tight text-white lg:text-2xl lg:leading-8">Completa tu registro</h1>
                 <p className="text-xs leading-5 text-slate-300 mt-1">Tu cuenta quedará en revisión hasta que un administrador la apruebe.</p>
               </div>
@@ -535,7 +535,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
               <h2 className="text-xl font-bold mb-2">Registro existente</h2>
               
               <p className="text-sm text-slate-300 mb-6 leading-relaxed">
-                Tu correo electrónico ya se encuentra registrado en FluidSell utilizando la red social{" "}
+                Tu correo electrónico ya está registrado en Relum con la red social{" "}
                 <span className="font-semibold text-sky-300">
                   {conflictingProvider === "google"
                     ? "Google"

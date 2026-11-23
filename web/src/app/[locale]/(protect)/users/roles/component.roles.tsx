@@ -233,7 +233,7 @@ export function DynamicComponent({
   const onSubmitRoleForm = async () => {
     const errors: Partial<Record<keyof typeof defaultRoleForm, string>> = {};
     if (!drawerForm.name.trim()) errors.name = "El nombre del cargo es obligatorio";
-    if (!drawerForm.key_id.trim()) errors.key_id = "El ID Clave es obligatorio";
+    if (!drawerForm.key_id.trim()) errors.key_id = "Escribe una sigla";
     if (drawerForm.key_id.trim().length > 5) errors.key_id = "Máximo 5 caracteres";
     if (!drawerForm.scope.trim()) errors.scope = "El alcance es obligatorio";
     if (Object.keys(errors).length > 0) { setDrawerErrors(errors); return; }
@@ -514,7 +514,7 @@ export function DynamicComponent({
 
   const tableColumns = useMemo(() => {
     return [
-      { key: "key_id", label: "ID Clave" },
+      { key: "key_id", label: "Sigla" },
       { key: "name", label: "Nombre" },
       { key: "description", label: "Descripción" },
       { key: "scope", label: "Alcance (Scope)" },
@@ -967,7 +967,7 @@ export function DynamicComponent({
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Buscar por ID Clave, nombre o descripción..."
+              placeholder="Buscar por sigla, nombre o descripción…"
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-purple-400 focus:bg-white"
             />
             <select
@@ -1222,10 +1222,10 @@ export function DynamicComponent({
             {/* CUERPO DEL FORMULARIO */}
             <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
 
-              {/* ID Clave */}
+              {/* Sigla */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  ID Clave <span className="text-rose-400">*</span>
+                  Sigla <span className="text-rose-400">*</span>
                   <span className="ml-1 normal-case text-slate-400 font-normal">(máx. 5 caracteres, ej: VEN)</span>
                 </label>
                 <input

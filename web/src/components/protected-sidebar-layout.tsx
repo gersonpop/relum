@@ -578,7 +578,7 @@ export function ProtectedSidebarLayout({
         });
         const body = (await response.json()) as { modules?: Array<Record<string, unknown>>; message?: string };
         if (!response.ok) {
-          throw new Error(body.message ?? "No se pudo cargar el menu");
+          throw new Error(body.message ?? "No se pudo cargar el menú");
         }
         if (cancelled) return;
         const rows = Array.isArray(body.modules) ? body.modules : [];
@@ -595,7 +595,7 @@ export function ProtectedSidebarLayout({
       } catch (error) {
         if (!cancelled && !hasLoadedFromCache) {
           setDynamicModules([]);
-          setModulesError(error instanceof Error ? error.message : "No se pudo cargar el menu");
+          setModulesError(error instanceof Error ? error.message : "No se pudo cargar el menú");
         }
       } finally {
         if (!cancelled) {
@@ -771,7 +771,7 @@ export function ProtectedSidebarLayout({
 
                 {modulesError ? (
                   <div className="rounded-xl border border-rose-300/35 bg-rose-950/35 px-3 py-2 text-xs text-rose-100">
-                    No se pudo cargar el menu. Intenta de nuevo.
+                    No se pudo cargar el menú. Recarga la página para intentarlo de nuevo.
                   </div>
                 ) : null}
                 {modulesLoading ? (
@@ -956,7 +956,7 @@ export function ProtectedSidebarLayout({
                     <span className="grid h-9 w-9 place-items-center text-[22px] leading-none">≡</span>
                     {expanded ? (
                       <>
-                        <span className="text-sm">Modo sidebar</span>
+                        <span className="text-sm">Tipo de menú</span>
                         <span className="ml-auto text-xs">⌄</span>
                       </>
                     ) : null}
@@ -1074,7 +1074,7 @@ export function ProtectedSidebarLayout({
                     }`}
                 >
                   <span className="grid h-9 w-9 place-items-center rounded-lg bg-rose-300/20 text-[20px] leading-none">⎋</span>
-                  {expanded ? <span className="text-sm font-semibold">Salir</span> : null}
+                  {expanded ? <span className="text-sm font-semibold">Cerrar sesión</span> : null}
                 </button>
               </div>
             </div>
@@ -1094,21 +1094,9 @@ export function ProtectedSidebarLayout({
 
 
           {children ?? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {[
-                ["Ventas Hoy", "$14,290", "+12%"],
-                ["Pedidos Pendientes", "38", "-4"],
-                ["Conversion", "4.8%", "+0.6"],
-                ["Ticket Promedio", "$86", "+3%"],
-                ["Clientes Activos", "1,204", "+18"],
-                ["Incidencias", "2", "-1"]
-              ].map(([metricTitle, value, delta]) => (
-                <article key={metricTitle} className="rounded-2xl border border-white/25 bg-slate-950/30 p-4 backdrop-blur-md">
-                  <p className="text-xs uppercase tracking-[0.14em] text-white/65">{metricTitle}</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
-                  <p className="mt-1 text-sm text-cyan-200">{delta}</p>
-                </article>
-              ))}
+            <div className="rounded-2xl border border-white/25 bg-slate-950/30 p-6 backdrop-blur-md">
+              <p className="text-lg font-semibold text-white">Bienvenido a Relum</p>
+              <p className="mt-2 text-sm text-white/75">Elige una opción del menú de la izquierda para empezar.</p>
             </div>
           )}
         </div>
