@@ -53,6 +53,7 @@ volver a cifrarlos.
 | 6ae7112 | Orquestación con Codex, documentación de Relum, healthcheck `/api/health` |
 | d50b34d | Usabilidad: menú móvil, registro en pasos, diálogos accesibles y confirmaciones (tareas 002–004) |
 | a8e9d88 | Relum como app móvil: barra inferior, pestañas por sección, bienvenida a pantalla completa, instalable (tareas 005–007) |
+| 42f8d5b | Solo entran usuarios registrados y aprobados; API 403 a cuentas no activas (tarea 008) |
 
 ## Pendientes (backlog)
 
@@ -84,4 +85,6 @@ Prioridad baja
       (formato `pg_dump -Fc`; restaurar con `pg_restore`).
 - [x] Solicitudes de «Edwin Saldaña» borradas (tarea 009). Copia previa:
       `/var/lib/postgresql/data/respaldo-antes-borrar-edwin-20261123.dump`.
+- [ ] Una solicitud «fallida» heredada (p. ej. Gerson Porras/LinkedIn) bloquea registrarse con otra red
+      («Registro existente»): decidir si las fallidas deben contar como conflicto.
 - [ ] Limpiar el resto de datos heredados: empresas Alfa/Beta/Gamma y 12 solicitudes de registro (`Onboarding`).

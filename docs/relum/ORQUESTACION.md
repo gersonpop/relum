@@ -58,7 +58,7 @@ Desde el 2026-11-22 el trabajo se reparte así:
 | 005 | Armazón de app móvil (barra inferior, PWA) | Codex | terminada, verificada y en producción | a8e9d88 |
 | 006 | Secciones con pestañas en el celular | Codex + ajustes del orquestador | terminada, verificada y en producción | a8e9d88 |
 | 007 | Inicio de sesión como app móvil | Codex | terminada, verificada y en producción | a8e9d88 |
-| 008 | Acceso solo para usuarios registrados y aprobados | Codex | terminada y verificada | ver ESTADO |
+| 008 | Acceso solo para usuarios registrados y aprobados | Codex | terminada, verificada y en producción | 42f8d5b |
 | 009 | Script: borrar solicitudes de Edwin Saldaña | Codex (script) + orquestador (ejecución) | ejecutada en producción | ver ESTADO |
 
 ## Lecciones aprendidas
