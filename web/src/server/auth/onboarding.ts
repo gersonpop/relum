@@ -45,22 +45,14 @@ export type OnboardingSubmitInput = {
   metadata?: any;
 };
 
-export type OnboardingCancelInput = {
+type OnboardingCancelInput = {
   email: string;
   provider: SocialProvider;
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  companyId?: string;
-  countryCode?: string;
-  country?: string;
-  department?: string;
-  city?: string;
-  dni?: string;
-  birthDate?: string;
-  gender?: string;
-  avatar?: string;
-  metadata?: any;
+  metadata: {
+    ip: string;
+    userAgent: string;
+    geo: {country: string; region: string; city: string};
+  };
 };
 
 type CatalogDb = {
@@ -593,100 +585,21 @@ export async function submitSocialOnboarding(input: OnboardingSubmitInput) {
 }
 
 export async function cancelSocialOnboarding(input: OnboardingCancelInput) {
-  await ensureUserStatusCatalog();
   const normalizedEmail = input.email.trim().toLowerCase();
-  const normalizedDni = input.dni?.trim() || null;
+  const {ip, userAgent, geo} = input.metadata;
 
-  await withOnboardingWrite(normalizedEmail, async (client) => {
-    const companyId = input.companyId || null;
-    const {current, target} = await readOnboardingForWrite(client, normalizedEmail, companyId);
-    // Cancellation is an action on the form, which closes once a request is current.
-    if (current) return;
-
-    const id = target?.id ?? nextId("ONB");
-    const previousStatus = target ? normalizeStatus(target.status) : null;
-    let countryCode = input.countryCode || target?.country_code || null;
-    let dni = normalizedDni || target?.dni || null;
-    if (companyId && countryCode && dni) {
-      const occupied = await client.query(
-        'SELECT 1 FROM "Onboarding" WHERE "country_code"=$1 AND "dni"=$2 AND "companyId"=$3 AND "id"<>$4 LIMIT 1',
-        [countryCode, dni, companyId, id]
-      );
-      // The duplicate-document dialog also submits the draft on cancellation.
-      if (occupied.rows.length > 0) {
-        countryCode = target?.country_code ?? countryCode;
-        dni = target?.dni ?? null;
-      }
-    }
-
-    const birthDateValue = input.birthDate ? input.birthDate : null;
-    const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
-
-    const saved = await client.query(
-      `
-        INSERT INTO "Onboarding" (
-          "id","email","name","last_name","phone_number","companyId","country_code","country_iso","department_code","city_code","dni","birth_date","gender","status","provider","avatar","metadata","created_at","updated_at"
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW()
-        )
-        ON CONFLICT ("id")
-        DO UPDATE SET
-          "name"=COALESCE(EXCLUDED."name", "Onboarding"."name"),
-          "last_name"=COALESCE(EXCLUDED."last_name", "Onboarding"."last_name"),
-          "phone_number"=COALESCE(EXCLUDED."phone_number", "Onboarding"."phone_number"),
-          "country_code"=EXCLUDED."country_code",
-          "country_iso"=COALESCE(EXCLUDED."country_iso", "Onboarding"."country_iso"),
-          "department_code"=COALESCE(EXCLUDED."department_code", "Onboarding"."department_code"),
-          "city_code"=COALESCE(EXCLUDED."city_code", "Onboarding"."city_code"),
-          "dni"=EXCLUDED."dni",
-          "birth_date"=COALESCE(EXCLUDED."birth_date", "Onboarding"."birth_date"),
-          "gender"=COALESCE(EXCLUDED."gender", "Onboarding"."gender"),
-          "status"=EXCLUDED."status",
-          "provider"=EXCLUDED."provider",
-          "avatar"=COALESCE(EXCLUDED."avatar", "Onboarding"."avatar"),
-          "metadata"=EXCLUDED."metadata",
-          "updated_at"=NOW()
-        WHERE "Onboarding"."email"=EXCLUDED."email"
-          AND "Onboarding"."companyId" IS NOT DISTINCT FROM EXCLUDED."companyId"
-        RETURNING "id"
-      `,
-      [
-        id,
-        target?.email ?? normalizedEmail,
-        input.firstName || null,
-        input.lastName || null,
-        input.phone || null,
-        companyId,
-        countryCode,
-        input.country || null,
-        input.department || null,
-        input.city || null,
-        dni,
-        birthDateValue,
-        input.gender || null,
-        "failed",
-        input.provider,
-        input.avatar || null,
-        metadataJson
-      ]
-    );
-
-    if (!saved.rows[0]) throw new Error("Unable to cancel onboarding request");
-
-    await client.query(
-      `INSERT INTO "AuditLog" (id,"actorType","actorId",action,entity,"entityId",metadata,"createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,NOW())`,
-      [
-        nextId("ONAUDIT"),
-        "system",
-        normalizedEmail,
-        "cancel-onboarding",
-        "Onboarding",
-        id,
-        JSON.stringify({provider: input.provider, fromStatus: previousStatus, toStatus: "failed"})
-      ]
-    );
-  });
+  await getPool().query(
+    `INSERT INTO "AuditLog" (id,"actorType","actorId",action,entity,metadata,"createdAt")
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,NOW())`,
+    [
+      nextId("ONAUDIT"),
+      "system",
+      normalizedEmail,
+      "cancel-onboarding",
+      "Onboarding",
+      JSON.stringify({provider: input.provider, ip, userAgent, geo})
+    ]
+  );
 }
 
 export async function listPendingApprovals() {

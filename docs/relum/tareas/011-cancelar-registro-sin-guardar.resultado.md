@@ -1,0 +1,7 @@
+Cancelar el registro descarta el borrador y cierra la sesión, incluso si falla la petición de cancelación. La única escritura es el evento `cancel-onboarding` en `AuditLog`, con el correo de sesión, la red social, la IP, el navegador y la geolocalización. Las solicitudes vigentes se conservan. [Cliente](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/app/[locale]/onboarding/OnboardingClient.tsx:347>) · [Ruta](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/app/api/v1/auth/social/onboarding/cancel/route.ts:5>) · [Servicio](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/server/auth/onboarding.ts:587>)
+
+El panel y la API administrativa impiden asignar `failed` y conservan la consulta y edición de solicitudes históricas. [Panel](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/app/[locale]/(protect)/users/onBoarding/component.onboarding.tsx:1247>) · [Persistencia](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/server/pgDynamicDbStore.ts:836>)
+
+**Verificación.** TypeScript y `git diff --check` pasaron. ESLint no mostró diagnósticos nuevos. Las pruebas con dobles confirmaron cero `INSERT` o `UPDATE` en `Onboarding` al cancelar y el cierre de sesión ante un HTTP 500 o un fallo de red.
+
+Sin commit, build ni acceso a producción. Queda pendiente la prueba en navegador con una sesión real.

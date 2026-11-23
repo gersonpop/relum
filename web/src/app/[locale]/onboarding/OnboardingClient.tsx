@@ -348,24 +348,10 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
     setPendingAction("cancel");
     setError(null);
     try {
-      if (conflictingProvider) {
-        await signOut({callbackUrl: `/${locale}`});
-        return;
-      }
-
-      const response = await fetch("/api/v1/auth/social/onboarding/cancel", {
-        method: "POST",
-        headers: {"content-type": "application/json"},
-        body: JSON.stringify({
-          email,
-          provider,
-          ...form,
-          phone: form.phone
-        })
-      });
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message ?? "No fue posible cancelar el registro");
+      if (!conflictingProvider) {
+        await fetch("/api/v1/auth/social/onboarding/cancel", {method: "POST"}).catch(() => {
+          // Continue signing out if the audit request fails.
+        });
       }
       await signOut({callbackUrl: `/${locale}`});
     } catch (err) {

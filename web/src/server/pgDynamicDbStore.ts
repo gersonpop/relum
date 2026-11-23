@@ -841,6 +841,7 @@ async function createOnboardingRecord(actor: ActorContext, payload: Record<strin
 
   const id = `ONB-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   const status = String(payload.status ?? "pending_approval").trim();
+  if (status.toLowerCase() === "failed") throw new Error("El estado Fallido solo está disponible en solicitudes anteriores.");
 
   const result = await getPgPool().query(
     `INSERT INTO public."Onboarding" (
@@ -879,6 +880,9 @@ async function updateOnboardingRecord(actor: ActorContext, id: string, patch: Re
     throw new Error("Forbidden");
   }
 
+  const status = patch.status === undefined ? null : String(patch.status).trim();
+  if (status?.toLowerCase() === "failed") throw new Error("El estado Fallido solo está disponible en solicitudes anteriores.");
+
   const next = {
     email: patch.email !== undefined ? String(patch.email).trim().toLowerCase() : row.email,
     name: patch.name !== undefined ? (patch.name ? String(patch.name).trim() : null) : row.name,
@@ -894,7 +898,6 @@ async function updateOnboardingRecord(actor: ActorContext, id: string, patch: Re
     gender: patch.gender !== undefined ? (patch.gender ? String(patch.gender).trim() : null) : row.gender,
     provider: patch.provider !== undefined ? (patch.provider ? String(patch.provider).trim() : null) : row.provider,
     avatar: patch.avatar !== undefined ? (patch.avatar ? String(patch.avatar).trim() : null) : row.avatar,
-    status: patch.status !== undefined ? String(patch.status).trim() : row.status,
     metadata: patch.metadata !== undefined ? (patch.metadata ? JSON.stringify(patch.metadata) : null) : (row.metadata ? JSON.stringify(row.metadata) : null)
   };
 
@@ -904,12 +907,12 @@ async function updateOnboardingRecord(actor: ActorContext, id: string, patch: Re
     `UPDATE public."Onboarding" SET 
       email=$1, name=$2, last_name=$3, phone_number=$4, "companyId"=$5, 
       country_code=$6, country_iso=$7, department_code=$8, city_code=$9, dni=$10, 
-      birth_date=$11, gender=$12, provider=$13, avatar=$14, status=$15, metadata=$16, updated_at=now() 
+      birth_date=$11, gender=$12, provider=$13, avatar=$14, status=COALESCE($15, status), metadata=$16, updated_at=now()
      WHERE id=$17 returning *`,
     [
       next.email, next.name, next.lastName, next.phoneNumber, next.companyId,
       next.countryCode, next.countryIso, next.departmentCode, next.cityCode, next.dni,
-      next.birthDate, next.gender, next.provider, next.avatar, next.status, next.metadata, id
+      next.birthDate, next.gender, next.provider, next.avatar, status, next.metadata, id
     ]
   );
   return result.rows[0];

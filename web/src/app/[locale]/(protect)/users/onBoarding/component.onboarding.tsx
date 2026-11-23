@@ -399,7 +399,7 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
         phoneNumber: form.phoneNumber,
         dni: form.dni,
         gender: form.gender,
-        status: form.status,
+        status: form.status.trim().toLowerCase() === "failed" ? undefined : form.status,
         provider: form.provider,
         companyId: form.companyId || null,
         countryCode: form.countryCode,
@@ -1243,7 +1243,9 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
                         <option value="pending_approval">Pendiente de aprobación</option>
                         <option value="active">Aprobado</option>
                         <option value="inactive">Rechazado</option>
-                        <option value="failed">Fallido</option>
+                        {form.status.trim().toLowerCase() === "failed" && (
+                          <option value={form.status} disabled>Fallido</option>
+                        )}
                       </select>
                     </label>
                   </div>
