@@ -54,6 +54,7 @@ volver a cifrarlos.
 | d50b34d | Usabilidad: menú móvil, registro en pasos, diálogos accesibles y confirmaciones (tareas 002–004) |
 | a8e9d88 | Relum como app móvil: barra inferior, pestañas por sección, bienvenida a pantalla completa, instalable (tareas 005–007) |
 | 42f8d5b | Solo entran usuarios registrados y aprobados; API 403 a cuentas no activas (tarea 008) |
+| d74a8ea | Solicitudes fallidas no bloquean el registro con otra red; envío compatible con índices reales (tarea 010) |
 
 ## Pendientes (backlog)
 

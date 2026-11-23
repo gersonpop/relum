@@ -63,4 +63,6 @@ Verificación del orquestador (2026-11-23):
   cambio. El código anterior usaba `ON CONFLICT ("email")`, que no existe en producción: enviar el
   registro habría fallado; queda corregido.
 - `tsc --noEmit` sin errores, `next build` exitoso, lint sin errores nuevos, JSON válidos.
-- Pendiente: probar en producción con `gersonpop@hotmail.com` (Microsoft) el registro completo.
+- Producción (d74a8ea): con la sesión de Microsoft de `gersonpop@hotmail.com`, `/onboarding` muestra el
+  formulario «Paso 1 de 3» (ya no el aviso de LinkedIn). Pendiente: que el usuario envíe el registro y
+  se apruebe desde la cuenta SU.
