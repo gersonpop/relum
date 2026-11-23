@@ -1207,6 +1207,7 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
                         <option value="google">Google</option>
                         <option value="facebook">Facebook</option>
                         <option value="linkedin">LinkedIn</option>
+                        <option value="azure-ad">Microsoft</option>
                       </select>
                     </label>
                   </div>

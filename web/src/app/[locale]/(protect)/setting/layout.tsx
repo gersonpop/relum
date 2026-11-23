@@ -31,7 +31,7 @@ function toSort(value: unknown) {
 export async function requireProtectedSettingContext(locale: string) {
   const {session, actor, companyName, userCargo, roleScope} = await resolveUserContext(locale);
 
-  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin"}).provider ?? "google");
+  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin" | "azure-ad"}).provider ?? "google");
   const navigation = await resolveLoginNavigation(session.user.email, provider);
   if (navigation.flow === "FORM_REQUIRED") redirect(`/${locale}/onboarding`);
 

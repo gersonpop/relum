@@ -56,6 +56,8 @@ export default async function HomePage({params}: HomePageProps) {
               googleLabel={t("socialGoogle")}
               facebookLabel={t("socialFacebook")}
               linkedInLabel={t("socialLinkedIn")}
+              microsoftLabel={t("socialMicrosoft")}
+              showMicrosoft={Boolean(process.env.AUTH_MICROSOFT_ID && process.env.AUTH_MICROSOFT_SECRET)}
               disclaimer={t("socialDisclaimer")}
             />
         </section>

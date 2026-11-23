@@ -6,10 +6,10 @@ import {signOut} from "next-auth/react";
 type Props = {
   locale: string;
   email: string;
-  provider: "google" | "facebook" | "linkedin";
+  provider: "google" | "facebook" | "linkedin" | "azure-ad";
   defaultFullName: string;
   defaultAvatar?: string;
-  conflictingProvider?: "google" | "facebook" | "linkedin" | null;
+  conflictingProvider?: "google" | "facebook" | "linkedin" | "azure-ad" | null;
 };
 
 export function OnboardingClient({locale, email, provider, defaultFullName, defaultAvatar, conflictingProvider}: Props) {
@@ -539,6 +539,8 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
                     ? "Google"
                     : conflictingProvider === "facebook"
                     ? "Facebook"
+                    : conflictingProvider === "azure-ad"
+                    ? "Microsoft"
                     : "LinkedIn"}
                 </span>
                 .

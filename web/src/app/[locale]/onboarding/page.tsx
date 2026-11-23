@@ -15,7 +15,7 @@ export default async function OnboardingPage({params}: OnboardingPageProps) {
     redirect(`/${locale}`);
   }
 
-  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin"}).provider ?? "google");
+  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin" | "azure-ad"}).provider ?? "google");
   const resolved = await resolveSocialOnboarding(session.user.email, provider);
 
   if (resolved.flow === "ACTIVE") {

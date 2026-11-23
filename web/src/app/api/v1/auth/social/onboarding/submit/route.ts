@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       dni: string;
       birthDate: string;
       gender: string;
-      provider: "google" | "facebook" | "linkedin";
+      provider: "google" | "facebook" | "linkedin" | "azure-ad";
       avatar?: string;
     };
 

@@ -1,6 +1,6 @@
 import {resolveSocialOnboarding} from "@/server/auth/onboarding";
 
-export async function resolveLoginNavigation(email: string | null | undefined, provider: "google" | "facebook" | "linkedin") {
+export async function resolveLoginNavigation(email: string | null | undefined, provider: "google" | "facebook" | "linkedin" | "azure-ad") {
   if (!email) {
     return {flow: "FORM_REQUIRED" as const};
   }

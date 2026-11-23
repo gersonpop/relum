@@ -2,6 +2,7 @@ import type {NextAuthOptions} from "next-auth";
 import FacebookProvider from "next-auth/providers/facebook";
 import GoogleProvider from "next-auth/providers/google";
 import LinkedInProvider from "next-auth/providers/linkedin";
+import AzureADProvider from "next-auth/providers/azure-ad";
 import { decryptWithKey } from "@/server/pgDynamicDbStore";
 import { getPgPool } from "@/server/postgres";
 
@@ -57,10 +58,45 @@ if (process.env.AUTH_LINKEDIN_ID && process.env.AUTH_LINKEDIN_SECRET) {
   );
 }
 
+// Microsoft: cuentas personales (Outlook, Hotmail) y de trabajo (Microsoft 365).
+if (process.env.AUTH_MICROSOFT_ID && process.env.AUTH_MICROSOFT_SECRET) {
+  providers.push(
+    AzureADProvider({
+      clientId: process.env.AUTH_MICROSOFT_ID,
+      clientSecret: process.env.AUTH_MICROSOFT_SECRET,
+      tenantId: "common",
+      profile(profile) {
+        const p = profile as {sub: string; name?: string; email?: string; preferred_username?: string};
+        return {
+          id: p.sub,
+          name: p.name ?? null,
+          // Algunas cuentas personales no envían "email"; se usa el usuario de inicio de sesión.
+          email: (p.email ?? p.preferred_username ?? "").toLowerCase() || null,
+          image: null
+        };
+      }
+    })
+  );
+}
+
 export const authOptions: NextAuthOptions = {
   providers,
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   callbacks: {
+    async signIn({account, profile}) {
+      // Microsoft: solo se acepta el correo si Microsoft garantiza que es del usuario.
+      // Cuentas personales (Outlook/Hotmail) siempre; cuentas de empresa solo con el
+      // claim xms_edov=true (dominio verificado). Evita que un administrador de otra
+      // empresa ponga un correo ajeno en su cuenta y entre como esa persona.
+      if (account?.provider === "azure-ad") {
+        const p = (profile ?? {}) as {tid?: string; xms_edov?: boolean | string; email?: string; preferred_username?: string};
+        const PERSONAL_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
+        const verified = p.tid === PERSONAL_TENANT || p.xms_edov === true || p.xms_edov === "1" || p.xms_edov === "true";
+        const email = p.email ?? p.preferred_username;
+        if (!verified || !email) return false;
+      }
+      return true;
+    },
     async jwt({token, profile, user, account}) {
       let profilePicture: string | undefined = undefined;
       if (profile) {
@@ -88,10 +124,14 @@ export const authOptions: NextAuthOptions = {
         try {
           const pool = getPgPool();
           const userRes = await pool.query(
-            'SELECT id_user_pk, username, "companyId", position, avatar FROM public."PlatformUser" WHERE user_email = $1 LIMIT 1',
+            'SELECT id_user_pk, username, "companyId", position, avatar, provider FROM public."PlatformUser" WHERE lower(user_email) = lower($1) LIMIT 1',
             [token.email]
           );
-          if (userRes.rows.length > 0) {
+          // Solo se cargan permisos si el usuario entra con la misma red con la que se registró
+          // (o fue creado manualmente). Así un correo igual en otra red no hereda sus permisos.
+          const registeredProvider = userRes.rows[0]?.provider ? String(userRes.rows[0].provider) : null;
+          const providerMatches = !registeredProvider || registeredProvider === "manual" || !token.provider || registeredProvider === token.provider;
+          if (userRes.rows.length > 0 && providerMatches) {
             const platformUser = userRes.rows[0];
             const userId = platformUser.id_user_pk;
             let companyId = platformUser.companyId;

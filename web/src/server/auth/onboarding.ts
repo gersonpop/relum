@@ -3,7 +3,7 @@ import {Pool} from "pg";
 export type OnboardingStatus = "active" | "inactive" | "pending_approval" | "failed";
 export type ResolveFlow = "ACTIVE" | "FORM_REQUIRED" | "PENDING_ONLY" | "PROVIDER_CONFLICT";
 
-type SocialProvider = "google" | "facebook" | "linkedin";
+type SocialProvider = "google" | "facebook" | "linkedin" | "azure-ad";
 
 type UserRecord = {
   id: string;
