@@ -5,6 +5,10 @@ Desde el 2026-11-22 el trabajo se reparte así:
 - **Claude (orquestador):** entiende lo que pide el usuario, lo divide en tareas pequeñas, escribe el
   brief de cada una, lanza agentes Codex, **verifica** lo que entregan, hace commit/push y despliega.
   Solo implementa directamente lo que Codex no puede hacer.
+  **Regla estricta (2026-11-23):** el orquestador no edita código, no genera archivos de la app
+  (iconos, imágenes) ni cambia datos por su cuenta, ni siquiera correcciones de una línea halladas al
+  verificar: todo eso vuelve a Codex con un brief o `codex exec resume`. Para cambios de datos, el
+  orquestador solo consulta (lectura) y confirma con el usuario; el script lo escribe Codex.
 - **Codex (agentes ejecutores):** implementan cada tarea en el código siguiendo `AGENTS.md`.
 
 ## Qué hace cada uno
@@ -65,3 +69,6 @@ Desde el 2026-11-22 el trabajo se reparte así:
   `/onboarding`, que exige sesión real.
 - Si el panel del navegador de pruebas está oculto, el navegador pausa transiciones y animaciones:
   el foco o los efectos animados pueden parecer rotos sin estarlo.
+- Entre 002 y la limpieza de usuarios el orquestador hizo cambios directos (foco del menú, ajustes de
+  diseño móvil, orden de botones, logo, borrado de usuarios por SQL). El usuario lo corrigió: esos
+  cambios deben ir a Codex.
