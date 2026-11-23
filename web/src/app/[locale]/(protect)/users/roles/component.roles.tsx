@@ -1,6 +1,9 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
 import { getSecureItem, setSecureItem } from "@/lib/secure-store";
 
 // Claves de caché de cliente estandarizadas
@@ -80,6 +83,7 @@ export function DynamicComponent({
   companyId: string;
 }) {
 
+  const dialogs = useTranslations("dialogs");
   const userPermissions = useMemo(() => {
     if (actorRole === "SU") {
       return { read: true, create: true, update: true, delete: true };
@@ -173,12 +177,14 @@ export function DynamicComponent({
 
   // Estado para el modal personalizado (microroles)
   const [modalOpen, setModalOpen] = useState(false);
+  const modalInputRef = useRef<HTMLInputElement>(null);
   const [modalType, setModalType] = useState<"create" | "edit">("create");
   const [modalModuleId, setModalModuleId] = useState("");
   const [modalMicroKey, setModalMicroKey] = useState("");
   const [modalInputValue, setModalInputValue] = useState("");
   const [modalModuleName, setModalModuleName] = useState("");
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
+  const [permissionsError, setPermissionsError] = useState("");
   const [search, setSearch] = useState("");
   const [scopeFilter, setScopeFilter] = useState("all");
   const [sortBy, setSortBy] = useState<keyof RoleRecord>("name");
@@ -198,17 +204,16 @@ export function DynamicComponent({
   // --- DRAWER DE CREACIÓN/EDICIÓN DE CARGO ---
   const defaultRoleForm = { key_id: "", name: "", description: "", scope: "user", company_id: "900000000" };
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [drawerForm, setDrawerForm] = useState(defaultRoleForm);
-  const [drawerErrors, setDrawerErrors] = useState<Partial<Record<keyof typeof defaultRoleForm, string>>>({});
+  const [drawerErrors, setDrawerErrors] = useState<Partial<Record<keyof typeof defaultRoleForm | "submit", string>>>({});
+  const roleNameRef = useRef<HTMLInputElement>(null);
 
   function openCreateDrawer() {
     setDrawerForm(defaultRoleForm);
     setEditingRoleId(null);
     setDrawerErrors({});
     setDrawerOpen(true);
-    window.setTimeout(() => setDrawerVisible(true), 10);
   }
 
   function openEditDrawer(item: RoleRecord) {
@@ -222,12 +227,10 @@ export function DynamicComponent({
     setEditingRoleId(item.id);
     setDrawerErrors({});
     setDrawerOpen(true);
-    window.setTimeout(() => setDrawerVisible(true), 10);
   }
 
   function closeDrawer() {
-    setDrawerVisible(false);
-    window.setTimeout(() => setDrawerOpen(false), 220);
+    setDrawerOpen(false);
   }
 
   const onSubmitRoleForm = async () => {
@@ -239,6 +242,8 @@ export function DynamicComponent({
     if (Object.keys(errors).length > 0) { setDrawerErrors(errors); return; }
 
     setSaving(true);
+    setDrawerErrors({});
+    let roleSaved = false;
     try {
       const payload = {
         name: drawerForm.name.trim(),
@@ -259,6 +264,7 @@ export function DynamicComponent({
       });
       const resBody = await response.json();
       if (!response.ok) throw new Error(resBody.message ?? "No se pudo guardar el cargo");
+      roleSaved = true;
 
       if (typeof window !== "undefined") localStorage.removeItem(ROLES_CACHE_KEY);
       setSuccessMessage(editingRoleId ? "Cargo actualizado correctamente" : "Cargo creado correctamente");
@@ -274,10 +280,13 @@ export function DynamicComponent({
       if (!editingRoleId && resBody?.data?.id) {
         setSelectedRoleId(resBody.data.id);
         setIsEditing(true);
+        setPermissionsError("");
         setPermissionsModalOpen(true);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar el cargo");
+      const message = err instanceof Error ? err.message : "Error al guardar el cargo";
+      if (roleSaved) setError(message);
+      else setDrawerErrors({ submit: message });
     } finally {
       setSaving(false);
     }
@@ -288,12 +297,13 @@ export function DynamicComponent({
     title: string;
     message: string;
     onConfirm: () => void | Promise<void>;
-    confirmLabel?: string;
+    confirmLabel: string;
     confirmVariant?: "danger" | "warning";
   }>({
     isOpen: false,
     title: "",
     message: "",
+    confirmLabel: "",
     onConfirm: () => { }
   });
 
@@ -301,17 +311,14 @@ export function DynamicComponent({
     title: string,
     message: string,
     onConfirm: () => void | Promise<void>,
-    confirmLabel = "Confirmar",
+    confirmLabel: string,
     confirmVariant: "danger" | "warning" = "danger"
   ) => {
     setConfirmModal({
       isOpen: true,
       title,
       message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-      },
+      onConfirm,
       confirmLabel,
       confirmVariant
     });
@@ -515,7 +522,7 @@ export function DynamicComponent({
       { key: "key_id", label: "Sigla" },
       { key: "name", label: "Nombre" },
       { key: "description", label: "Descripción" },
-      { key: "scope", label: "Alcance (Scope)" },
+      { key: "scope", label: "Alcance" },
       { key: "permissions_count", label: "Cant. Permisos" },
       { key: "integrity", label: "Integridad" },
       { key: "actions", label: "Acciones" }
@@ -547,6 +554,7 @@ export function DynamicComponent({
   }
 
   const handleEditPermissions = (item: RoleRecord) => {
+    setPermissionsError("");
     setSelectedRoleId(item.id);
     setPermissionsModalOpen(true);
   };
@@ -764,37 +772,23 @@ export function DynamicComponent({
       const hasOtherPermissions = current.create || current.update || current.delete || Object.values(current.microroles || {}).some(v => !!v);
 
       if (hasOtherPermissions) {
-        const moduleName = activeModules.find((m) => m.id === moduleId)?.name || "este módulo";
-
-        showConfirm(
-          "¿Retirar todos los permisos?",
-          `Al deshabilitar el permiso de lectura para "${moduleName}", también se desactivarán automáticamente todos los permisos de escritura (Crear, Actualizar, Borrar) y las acciones especiales configuradas. ¿Deseas continuar?`,
-          () => {
-            setPermissions((prev) => {
-              const currentPerm = prev[moduleId] || { read: false, create: false, update: false, delete: false, microroles: {} };
-              const clearedMicros: Record<string, boolean> = {};
-              if (currentPerm.microroles) {
-                Object.keys(currentPerm.microroles).forEach((key) => {
-                  clearedMicros[key] = false;
-                });
-              }
-              const updated = {
-                ...prev,
-                [moduleId]: {
-                  ...currentPerm,
-                  read: false,
-                  create: false,
-                  update: false,
-                  delete: false,
-                  microroles: clearedMicros
-                }
-              };
-              return syncContainerPermissions(updated);
-            });
-          },
-          "Desactivar todos",
-          "warning"
-        );
+        setPermissions((prev) => {
+          const currentPerm = prev[moduleId] || current;
+          const clearedMicros = Object.fromEntries(
+            Object.keys(currentPerm.microroles || {}).map((key) => [key, false])
+          );
+          return syncContainerPermissions({
+            ...prev,
+            [moduleId]: {
+              ...currentPerm,
+              read: false,
+              create: false,
+              update: false,
+              delete: false,
+              microroles: clearedMicros
+            }
+          });
+        });
         return;
       }
     }
@@ -876,7 +870,7 @@ export function DynamicComponent({
 
   const handleSave = async () => {
     setSaving(true);
-    setError("");
+    setPermissionsError("");
     try {
       const response = await fetch("/api/v1/db/roles", {
         method: "PATCH",
@@ -895,12 +889,39 @@ export function DynamicComponent({
       const roleBody = await roleRes.json();
       const fetchedRoles = Array.isArray(roleBody?.data) ? roleBody.data : [];
       setRoles(fetchedRoles);
-
+      setPermissionsModalOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar");
+      setPermissionsError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSavePermissions = () => {
+    const savedPermissions = new Map(Object.entries(selectedRole?.permissions || {}));
+    const removesPermission = Object.entries(permissions).some(([moduleId, pending]) => {
+      const saved = savedPermissions.get(moduleId);
+      if (!saved) return false;
+
+      const removesAccess = (saved.read && !pending.read) ||
+        (saved.create && !pending.create) ||
+        (saved.update && !pending.update) ||
+        (saved.delete && !pending.delete);
+      const pendingActions = new Map(Object.entries(pending.microroles || {}));
+      return removesAccess || Object.entries(saved.microroles || {})
+        .some(([action, allowed]) => allowed && !pendingActions.get(action));
+    });
+
+    if (selectedRole && removesPermission) {
+      showConfirm(
+        dialogs("removePermissions"),
+        dialogs("savePermissionRevocationsDescription", { name: selectedRole.name }),
+        handleSave,
+        dialogs("removePermissions")
+      );
+      return;
+    }
+    void handleSave();
   };
 
   // handleAddRole ahora abre el drawer premium
@@ -908,8 +929,8 @@ export function DynamicComponent({
 
   const handleDeleteRole = async (item: RoleRecord) => {
     showConfirm(
-      "¿Eliminar este cargo?",
-      `Esta acción es irreversible y removerá todos los privilegios asociados al cargo "${item.name}". ¿Deseas continuar?`,
+      dialogs("deleteRole"),
+      `${dialogs("deleteRoleDescription", { name: item.name })} ${dialogs("irreversible")}`,
       async () => {
         setSaving(true);
         try {
@@ -939,8 +960,7 @@ export function DynamicComponent({
           setSaving(false);
         }
       },
-      "Eliminar",
-      "danger"
+      dialogs("deleteRole")
     );
   };
 
@@ -1124,14 +1144,17 @@ export function DynamicComponent({
                               onClick={() => handleRepairRole(item)}
                               className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition duration-150 shadow-sm whitespace-nowrap animate-pulse"
                             >
-                              🛠️ Reparar
+                              <span aria-hidden="true">🛠️</span> Reparar
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleEditPermissions(item)}
-                              className="rounded-xl border border-purple-200 bg-purple-50 px-4 py-1.5 text-xs font-semibold text-[#9b5de5] hover:bg-purple-100 hover:border-purple-300 transition duration-150 shadow-sm whitespace-nowrap"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-4 py-1.5 text-xs font-semibold text-[#9b5de5] hover:bg-purple-100 hover:border-purple-300 transition duration-150 shadow-sm whitespace-nowrap"
                             >
+                              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Zm-3-10 2 2 4-4" />
+                              </svg>
                               Ver permisos
                             </button>
                           )}
@@ -1180,53 +1203,25 @@ export function DynamicComponent({
 
       {/* DRAWER LATERAL DE CREACIÓN / EDICIÓN DE CARGO */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${drawerVisible ? "opacity-100" : "opacity-0"}`}
-            onClick={closeDrawer}
-          />
-          <aside
-            className={`absolute right-0 top-0 h-full w-full max-w-[480px] overflow-y-auto bg-white shadow-2xl transition-transform duration-220 ease-out flex flex-col ${drawerVisible ? "translate-x-0" : "translate-x-full"
-              }`}
-          >
-            {/* HEADER DEL DRAWER */}
-            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5 bg-slate-50/60 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#9b5de5] to-[#743eb3] text-white shadow-md shadow-purple-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.963 0a9 9 0 1 0-11.963 0m11.963 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800 leading-tight">
-                    {editingRoleId ? "Editar Cargo" : "Nuevo Cargo"}
-                  </h3>
-                  <p className="text-xs text-slate-400 font-medium mt-0.5">
-                    {editingRoleId ? "Modifica los datos del cargo seleccionado" : "Crea un nuevo cargo con persistencia en la base de datos"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition mt-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
+        <Dialog
+          title={editingRoleId ? "Editar cargo" : "Nuevo cargo"}
+          placement="side"
+          className="max-w-[480px]"
+          onClose={closeDrawer}
+          dismissible={!saving}
+          initialFocusRef={roleNameRef}
+        >
+          <div className="space-y-5">
             {/* CUERPO DEL FORMULARIO */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+            <div className="space-y-5">
 
               {/* Sigla */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label htmlFor="role-code" className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                   Sigla <span className="text-rose-400">*</span>
                   <span className="ml-1 normal-case text-slate-400 font-normal">(máx. 5 caracteres, ej: VEN)</span>
                 </label>
-                <input
+                <input id="role-code"
                   type="text"
                   value={drawerForm.key_id}
                   disabled={!!editingRoleId}
@@ -1239,26 +1234,26 @@ export function DynamicComponent({
 
               {/* Nombre */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label htmlFor="role-name" className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                   Nombre del Cargo <span className="text-rose-400">*</span>
                 </label>
-                <input
+                <input id="role-name"
                   type="text"
                   value={drawerForm.name}
                   onChange={(e) => setDrawerForm((s) => ({ ...s, name: e.target.value }))}
                   placeholder="Ej: Vendedor de Mostrador"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 focus:bg-white transition"
-                  autoFocus={!editingRoleId}
+                  ref={roleNameRef}
                 />
                 {drawerErrors.name ? <p className="mt-1 text-xs text-rose-600">{drawerErrors.name}</p> : null}
               </div>
 
               {/* Alcance */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                  Alcance (Scope) <span className="text-rose-400">*</span>
+                <label htmlFor="role-scope" className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Alcance <span className="text-rose-400">*</span>
                 </label>
-                <select
+                <select id="role-scope"
                   value={drawerForm.scope}
                   onChange={(e) => setDrawerForm((s) => ({ ...s, scope: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 focus:bg-white transition"
@@ -1272,11 +1267,11 @@ export function DynamicComponent({
 
               {/* Descripción */}
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                <label htmlFor="role-description" className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
                   Descripción
                   <span className="ml-1 normal-case text-slate-400 font-normal">(opcional)</span>
                 </label>
-                <textarea
+                <textarea id="role-description"
                   value={drawerForm.description}
                   onChange={(e) => setDrawerForm((s) => ({ ...s, description: e.target.value }))}
                   placeholder="Describe brevemente las responsabilidades de este cargo..."
@@ -1292,11 +1287,13 @@ export function DynamicComponent({
               )}
             </div>
 
+            {drawerErrors.submit ? <p role="alert" className="text-sm text-rose-700">{drawerErrors.submit}</p> : null}
             {/* FOOTER DEL DRAWER */}
-            <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4 bg-slate-50/60 flex-shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 py-4">
               <button
                 type="button"
                 onClick={closeDrawer}
+                disabled={saving}
                 className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-5 py-2.5 text-sm font-semibold text-slate-600 transition"
               >
                 Cancelar
@@ -1310,65 +1307,30 @@ export function DynamicComponent({
                 {saving ? "Guardando..." : editingRoleId ? "Guardar Cambios" : "Crear Cargo"}
               </button>
             </div>
-          </aside>
-        </div>
+          </div>
+        </Dialog>
       )}
 
       {/* MODAL DE MATRIZ DE PERMISOS */}
       {permissionsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md" onClick={() => { if (!saving) setPermissionsModalOpen(false); }} />
-
-          <div className="relative bg-white rounded-2xl border border-slate-100 shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
-
-            {/* ENCABEZADO */}
-            <div className="flex items-center justify-between border-b border-slate-100 p-5 bg-slate-50/50 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#9b5de5] to-[#743eb3] text-white shadow-md shadow-purple-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-3.81-.318-7.532-.902-9.136A11.959 11.959 0 0 1 12 2.714Z" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <h3 className="text-base font-bold text-slate-800 leading-tight">
-                    Matriz de Permisos: {roleForm.name || "Cargo"}
-                  </h3>
-                  <span className="text-xs text-slate-400 font-medium mt-0.5 block">
-                    {roleForm.description || "Sin descripción"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {isEditing ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200 animate-pulse">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Modo Edición
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 border border-slate-200">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    Modo Lectura
-                  </span>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => setPermissionsModalOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition"
-                  title="Cerrar"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+        <Dialog
+          title={`Matriz de permisos · ${roleForm.name || "Cargo"}`}
+          className="max-w-5xl"
+          onClose={() => setPermissionsModalOpen(false)}
+          dismissible={!saving}
+        >
+          <div className="min-w-0 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-500">{roleForm.description || "Sin descripción"}</p>
+              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${isEditing ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                {isEditing ? "Modo edición" : "Modo lectura"}
+              </span>
             </div>
 
             {/* CUERPO (CON SCROLL) */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-200 bg-slate-50/30">
+            <div className="space-y-4">
               {sections.map((sect) => (
-                <div key={sect.category} className="overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+                <div key={sect.category} className="overflow-x-auto rounded-xl border border-slate-100 bg-white shadow-sm">
 
                   {/* HEADER DE LA CATEGORÍA */}
                   <div className="bg-slate-100 px-4 py-2 text-center text-xs font-bold uppercase tracking-wider text-slate-600 border-b border-slate-200">
@@ -1376,7 +1338,7 @@ export function DynamicComponent({
                   </div>
 
                   {/* TABLA DE DETALLES */}
-                  <table className="min-w-full table-fixed text-sm">
+                  <table className="w-full min-w-[580px] table-fixed text-sm">
                     <thead>
                       <tr className="border-b border-slate-100 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50/50">
                         <th className="w-[45%] px-4 py-2 text-left font-semibold">MÓDULO / RUTA</th>
@@ -1446,12 +1408,16 @@ export function DynamicComponent({
                                 {!hasChildren ? (
                                   <button
                                     type="button"
+                                    aria-expanded={isExpanded}
                                     onClick={() => toggleExpand(item.id)}
-                                    className={`relative rounded-xl px-3 py-1 text-xs font-semibold border transition duration-150 ${isExpanded
+                                    className={`relative inline-flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-semibold border transition duration-150 ${isExpanded
                                         ? "bg-white text-purple-600 border-purple-600 font-bold shadow-sm shadow-purple-50"
                                         : "bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
                                       }`}
                                   >
+                                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`h-3 w-3 ${isExpanded ? "rotate-180" : ""}`}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+                                    </svg>
                                     {isExpanded ? "Ocultar" : "Acciones"}
                                     {(() => {
                                       const rawActions = Array.isArray(item.actions) ? item.actions : [];
@@ -1534,7 +1500,7 @@ export function DynamicComponent({
                                                 <span className="text-slate-700 truncate flex items-center gap-1.5">
                                                   {micro.label}
                                                   {isDeprecated && (
-                                                    <span className="text-amber-500 font-bold" title="Acción Deprecada (Warning)">⚠️</span>
+                                                    <span className="text-amber-500 font-bold" title="Acción en desuso">⚠️</span>
                                                   )}
                                                 </span>
                                               </label>
@@ -1556,8 +1522,9 @@ export function DynamicComponent({
               ))}
             </div>
 
+            {permissionsError ? <p role="alert" className="text-sm text-rose-700">{permissionsError}</p> : null}
             {/* BOTONES DE ACCIÓN EN EL FOOTER DEL MODAL */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-100 p-5 bg-slate-50/50 flex-shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 py-4">
               {!isEditing ? (
                 <>
                   {userPermissions.update ? (
@@ -1582,6 +1549,7 @@ export function DynamicComponent({
                   <button
                     type="button"
                     onClick={() => setIsEditing(false)}
+                    disabled={saving}
                     className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-5 py-2 text-sm font-semibold text-slate-600 transition"
                   >
                     Cancelar
@@ -1589,10 +1557,7 @@ export function DynamicComponent({
                   <button
                     type="button"
                     disabled={saving}
-                    onClick={async () => {
-                      await handleSave();
-                      setPermissionsModalOpen(false);
-                    }}
+                    onClick={handleSavePermissions}
                     className="rounded-xl bg-[#2ad072] px-6 py-2 text-sm font-bold text-white hover:bg-emerald-600 disabled:opacity-50 transition shadow-md"
                   >
                     {saving ? "Guardando..." : "Guardar Cambios"}
@@ -1602,48 +1567,22 @@ export function DynamicComponent({
             </div>
 
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* MODAL DE REPARACIÓN DE CARGO (INTEGRIDAD VULNERADA) */}
       {repairModalOpen && repairRoleItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onClick={() => { if (!repairLoading) setRepairModalOpen(false); }} />
-
-          <div className="relative bg-white rounded-3xl border border-slate-100 shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
-
-            {/* ENCABEZADO */}
-            <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-rose-50/50 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg shadow-rose-200">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="w-6 h-6 animate-pulse">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <h3 className="text-lg font-extrabold text-slate-800 leading-tight">
-                    Reparar Integridad del Cargo
-                  </h3>
-                  <span className="text-xs text-rose-500 font-semibold mt-0.5 block">
-                    Cargo: {repairRoleItem.name} ({repairRoleItem.key_id})
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setRepairModalOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition"
-                title="Cerrar"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+        <Dialog
+          title="Reparar permisos del cargo"
+          className="max-w-2xl"
+          onClose={() => setRepairModalOpen(false)}
+          dismissible={!repairLoading}
+        >
+          <div className="space-y-4">
+            <p className="break-words text-sm text-slate-500">{repairRoleItem.name} ({repairRoleItem.key_id})</p>
 
             {/* CONTENIDO DEL MODAL */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="space-y-6">
               {headers["x-actor-role"] !== "SU" ? (
                 /* BANNER PREMIUM DE ACCESO DENEGADO PARA NO-SU */
                 <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center space-y-4 shadow-sm">
@@ -1654,7 +1593,7 @@ export function DynamicComponent({
                   </div>
                   <h4 className="text-lg font-bold text-red-800">Acceso Altamente Restringido</h4>
                   <p className="text-sm text-red-600 max-w-md mx-auto leading-relaxed">
-                    Se ha detectado una alteración no autorizada de privilegios (Vulneración criptográfica). La reparación de firmas y consistencia de base de datos está restringida **exclusivamente a Super Usuarios (SU)** del sistema.
+                    Solo los superusuarios pueden reparar los permisos de este cargo.
                   </p>
                   <p className="text-xs text-red-400 font-semibold">
                     Por favor, póngase en contacto con el administrador de seguridad informática.
@@ -1664,8 +1603,8 @@ export function DynamicComponent({
                 /* ACCIONES PARA SUPER USUARIO (SU) */
                 <div className="space-y-6">
                   {repairError && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600 font-medium">
-                      ❌ {repairError}
+                    <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600 font-medium">
+                      {repairError}
                     </div>
                   )}
 
@@ -1676,10 +1615,10 @@ export function DynamicComponent({
                           ⚠️ Alerta de Seguridad del Sistema
                         </h4>
                         <p className="text-xs text-amber-700">
-                          La firma criptográfica `hashPermission` de este cargo no coincide con el estado actual de los permisos en la base de datos. Esto indica que los registros han sido alterados directamente o de forma ajena a la plataforma.
+                          Los permisos actuales de este cargo no coinciden con los que registró Relum.
                         </p>
                         <p className="text-xs text-amber-700 font-semibold">
-                          Seleccione uno de los dos métodos oficiales de reparación provistos a continuación:
+                          Elige cómo quieres recuperar los permisos.
                         </p>
                       </div>
 
@@ -1687,7 +1626,14 @@ export function DynamicComponent({
                         {/* OP-1: RESTAURAR DESDE BACKUP CIFRADO */}
                         <button
                           type="button"
-                          onClick={() => handleExecuteRepair("restore")}
+                          onClick={() => {
+                            showConfirm(
+                              dialogs("restorePermissions"),
+                              dialogs("restorePermissionsDescription", { name: repairRoleItem.name }),
+                              () => handleExecuteRepair("restore"),
+                              dialogs("restorePermissions")
+                            );
+                          }}
                           disabled={repairLoading}
                           className="flex flex-col text-left p-5 rounded-2xl border border-slate-200 hover:border-purple-300 hover:bg-purple-50/20 transition group active:scale-[0.98] transform duration-150"
                         >
@@ -1695,10 +1641,10 @@ export function DynamicComponent({
                             🛡️
                           </div>
                           <span className="text-sm font-bold text-slate-800 group-hover:text-purple-700 transition">
-                            Restaurar desde Backup
+                            {dialogs("restorePermissions")}
                           </span>
                           <span className="text-2xs text-slate-500 mt-1 leading-relaxed">
-                            Recupera la copia de seguridad guardada y cifrada con AES-256-CBC, realiza un análisis de discrepancias, sobrescribe los permisos alterados y genera un reporte oficial de auditoría.
+                            Recupera los permisos guardados en la copia de seguridad y genera un informe de los cambios.
                           </span>
                         </button>
 
@@ -1707,11 +1653,10 @@ export function DynamicComponent({
                           type="button"
                           onClick={() => {
                             showConfirm(
-                              "¿Configurar desde Cero?",
-                              "Esta opción revocará y eliminará por completo todos los permisos activos y copias de seguridad de este cargo, restableciéndolo a un estado vacío. ¿Deseas proceder?",
+                              dialogs("resetPermissions"),
+                              dialogs("resetPermissionsDescription", { name: repairRoleItem.name }),
                               () => handleExecuteRepair("scratch"),
-                              "Restablecer a Cero",
-                              "danger"
+                              dialogs("resetPermissions")
                             );
                           }}
                           disabled={repairLoading}
@@ -1721,10 +1666,10 @@ export function DynamicComponent({
                             🧹
                           </div>
                           <span className="text-sm font-bold text-slate-800 group-hover:text-rose-700 transition">
-                            Configurar desde Cero
+                            {dialogs("resetPermissions")}
                           </span>
                           <span className="text-2xs text-slate-500 mt-1 leading-relaxed">
-                            Limpia y depura completamente cualquier configuración corrupta existente en la base de datos para este cargo, permitiendo la asignación manual y limpia desde el principio.
+                            Quita los permisos actuales y la copia de seguridad para que puedas asignar permisos desde cero.
                           </span>
                         </button>
                       </div>
@@ -1733,7 +1678,7 @@ export function DynamicComponent({
                         <div className="flex flex-col items-center justify-center py-6 gap-3">
                           <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-500 border-t-transparent" />
                           <span className="text-xs font-semibold text-purple-600 animate-pulse">
-                            Ejecutando operaciones de recuperación y validación criptográfica...
+                            Reparando permisos…
                           </span>
                         </div>
                       )}
@@ -1750,7 +1695,7 @@ export function DynamicComponent({
                             Reparación Completada Exitosamente
                           </h4>
                           <p className="text-xs text-emerald-700 mt-1">
-                            Se ha reestablecido la integridad de los permisos y se ha vuelto a firmar digitalmente el cargo en la base de datos.
+                            Los permisos del cargo se repararon.
                           </p>
                         </div>
                       </div>
@@ -1765,7 +1710,7 @@ export function DynamicComponent({
                       </div>
 
                       <div className="rounded-xl bg-slate-50 border border-slate-100 p-3.5 text-2xs text-slate-500 leading-normal">
-                        <strong>🛡️ Nota de Auditoría:</strong> El reporte completo de diferencias detectadas ha sido registrado permanentemente en la tabla `audit_logs` con la acción de auditoría `"repair_audit_report"`.
+                        El informe completo quedó guardado en el historial de auditoría.
                       </div>
                     </div>
                   )}
@@ -1790,58 +1735,28 @@ export function DynamicComponent({
             </div>
 
           </div>
-        </div>
+        </Dialog>
       )}
 
       {/* MODAL PERSONALIZADO Y ESTILIZADO */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* BACKDROP BLUR (GLASSMORPHISM) */}
-          <div
-            className="absolute inset-0 bg-slate-950/40 backdrop-blur-md transition-opacity duration-300"
-            onClick={() => setModalOpen(false)}
-          />
-
-          {/* CONTENEDOR DEL MODAL PREMIUM */}
-          <form
-            onSubmit={handleModalSubmit}
-            className="relative bg-white rounded-2xl border border-slate-100 shadow-2xl p-6 w-full max-w-[400px] flex flex-col gap-5 transform transition-all animate-in fade-in zoom-in-95 duration-200"
-          >
-            {/* ENCABEZADO CON ICONO Y BOTÓN CERRAR */}
-            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#9b5de5] to-[#743eb3] text-white shadow-md shadow-purple-200">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.99l1.005.831a1.125 1.125 0 0 1 .26 1.43l-1.297 2.247a1.125 1.125 0 0 1-1.37.491l-1.216-.456c-.356-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.43l1.004-.83c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                </svg>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <h3 className="text-base font-bold text-slate-800 leading-tight">
-                  {modalType === "create" ? "Nueva Acción" : "Editar Acción"}
-                </h3>
-                <span className="text-xs text-slate-400 font-medium truncate">
-                  {modalType === "create" ? `Módulo: ${modalModuleName}` : "Actualizar acción"}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="ml-auto flex h-8 w-8 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition duration-150"
-                title="Cerrar"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+        <Dialog
+          title={modalType === "create" ? "Nueva acción" : "Editar acción"}
+          className="max-w-[400px]"
+          onClose={() => setModalOpen(false)}
+          initialFocusRef={modalInputRef}
+        >
+          <form onSubmit={handleModalSubmit} className="flex flex-col gap-4">
+            {modalType === "create" ? (
+              <p className="text-sm text-slate-500">{modalModuleName}</p>
+            ) : null}
 
             {/* CUERPO DEL FORMULARIO */}
             <div className="flex flex-col gap-4">
               <p className="text-xs text-slate-500 leading-relaxed">
                 {modalType === "create"
-                  ? "Las acciones te permiten definir permisos ultra-específicos de negocio para este módulo de manera dinámica."
-                  : "Modifica el nombre de la acción seleccionada. Los cambios se aplicarán de inmediato en la grilla de control."}
+                  ? "Crea un permiso para una acción de este módulo."
+                  : "El nuevo nombre se verá en la tabla de permisos."}
               </p>
 
               <label className="block">
@@ -1855,7 +1770,7 @@ export function DynamicComponent({
                   onChange={(e) => setModalInputValue(e.target.value)}
                   placeholder="Ej: Aprobar Lote de Flores"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 focus:bg-white transition duration-200"
-                  autoFocus
+                  ref={modalInputRef}
                 />
               </label>
             </div>
@@ -1877,41 +1792,17 @@ export function DynamicComponent({
               </button>
             </div>
           </form>
-        </div>
+        </Dialog>
       )}
       {confirmModal.isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))} />
-          <div className="relative z-10 w-full max-w-md transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col items-center text-center">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-full ${confirmModal.confirmVariant === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"} mb-4`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">{confirmModal.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmModal.onConfirm();
-                }}
-                className={`rounded-xl ${confirmModal.confirmVariant === "danger" ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-amber-500 hover:bg-amber-600 text-slate-900"} px-5 py-2.5 text-sm font-semibold transition shadow-sm`}
-              >
-                {confirmModal.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={confirmModal.title}
+          description={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          variant={confirmModal.confirmVariant}
+          onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+          onConfirm={confirmModal.onConfirm}
+        />
       ) : null}
 
       {/* Toasts Container */}

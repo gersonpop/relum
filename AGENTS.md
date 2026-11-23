@@ -55,7 +55,7 @@ npm run build                  # build de producción (standalone)
 5. **Textos para el usuario en español claro**, con tildes y signos ¿¡ correctos, sin jerga técnica
    (nada de "API", "BD", "scope", "status", "ID clave"). Agrega los textos en `messages/es.json` y, si
    aplica, en `en.json` y `fr.json`.
-6. **UI hiperintuitiva:** etiquetas visibles en todos los campos, acciones con texto (no solo iconos),
+6. **UI ultraintuitiva, simple, funcional pero moderna** (la esencia de Relum): etiquetas visibles en todos los campos, acciones con texto (no solo iconos),
    confirmación antes de acciones destructivas, estados vacío/cargando/error con el siguiente paso claro.
 7. **Dependencias:** si cambias `package.json`, regenera `package-lock.json` con **npm 10**
    (`npx -y npm@10 install --package-lock-only`). La imagen Docker usa Node 22 / npm 10 y `npm ci`

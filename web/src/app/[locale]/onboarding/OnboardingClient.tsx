@@ -1,7 +1,8 @@
 "use client";
 
-import {useEffect, useMemo, useState} from "react";
+import {useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode} from "react";
 import {signOut} from "next-auth/react";
+import {useTranslations} from "next-intl";
 
 type Props = {
   locale: string;
@@ -12,7 +13,19 @@ type Props = {
   conflictingProvider?: "google" | "facebook" | "linkedin" | "azure-ad" | null;
 };
 
+const steps = [
+  {title: "personal", fields: ["firstName", "lastName", "dni", "birthDate", "gender"]},
+  {title: "contact", fields: ["country", "department", "city", "countryCode", "phone"]},
+  {title: "company", fields: ["companyId", "roleId"]}
+] as const;
+
+type RequiredField = (typeof steps)[number]["fields"][number];
+
+const fieldClass = "w-full min-w-0 rounded-xl border border-white/20 bg-slate-950/35 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-300 focus:border-cyan-300 focus:ring-2 focus:ring-cyan-300/40 disabled:opacity-60 aria-invalid:border-rose-300 [color-scheme:dark]";
+const buttonClass = "min-h-11 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-60";
+
 export function OnboardingClient({locale, email, provider, defaultFullName, defaultAvatar, conflictingProvider}: Props) {
+  const t = useTranslations("onboardingSteps");
   const [companies, setCompanies] = useState<Array<{id: string; name: string}>>([]);
   const [genders, setGenders] = useState<Array<{value: string; label: string}>>([]);
   const [countries, setCountries] = useState<Array<{code: string; label: string; prefixArea?: string}>>([]);
@@ -20,11 +33,15 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
   const [cities, setCities] = useState<Array<{code: string; label: string}>>([]);
   const [roles, setRoles] = useState<Array<{id: string; name: string}>>([]);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"save" | "cancel" | null>(null);
+  const saving = pendingAction !== null;
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [showConflictModal, setShowConflictModal] = useState(!!conflictingProvider);
   const [showDniConflictModal, setShowDniConflictModal] = useState(false);
   const [dniConflictProvider, setDniConflictProvider] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
+  const [invalidFields, setInvalidFields] = useState<RequiredField[]>([]);
+  const focusTarget = useRef<string | null>(null);
 
   const defaultNameParts = defaultFullName.trim().split(/\s+/).filter(Boolean);
   const defaultFirstName = defaultNameParts.slice(0, 1).join(" ");
@@ -178,24 +195,79 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
     void loadRoles();
   }, [form.companyId]);
 
-  const valid = useMemo(
-    () =>
-      [
-        form.firstName,
-        form.lastName,
-        form.phone,
-        form.companyId,
-        form.roleId,
-        form.countryCode,
-        form.country,
-        form.department,
-        form.city,
-        form.dni,
-        form.birthDate,
-        form.gender
-      ].every((value) => value.trim().length > 0),
-    [form]
-  );
+  useLayoutEffect(() => {
+    if (focusTarget.current) {
+      document.getElementById(focusTarget.current)?.focus();
+      focusTarget.current = null;
+    }
+  }, [step, invalidFields]);
+
+  const currentStep = steps.at(step) ?? steps[0];
+  const isLastStep = step === steps.length - 1;
+
+  function goToStep(nextStep: number) {
+    focusTarget.current = "onboarding-step";
+    setInvalidFields([]);
+    setError(null);
+    setStep(nextStep);
+  }
+
+  function handleStepSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving || uploadingAvatar) return;
+
+    const missingFields = currentStep.fields.filter((field) => {
+      const {[field]: value} = form;
+      return !value.trim();
+    });
+    if (missingFields.length > 0) {
+      focusTarget.current = `onboarding-${missingFields[0]}`;
+      setInvalidFields(missingFields);
+      return;
+    }
+
+    if (isLastStep) {
+      void submit();
+    } else {
+      goToStep(step + 1);
+    }
+  }
+
+  function renderField(
+    field: RequiredField,
+    renderControl: (props: {
+      id: string;
+      value: string;
+      className: string;
+      "aria-required": true;
+      "aria-invalid": boolean;
+      "aria-describedby"?: string;
+    }) => ReactNode
+  ) {
+    const id = `onboarding-${field}`;
+    const {[field]: value} = form;
+    const invalid = invalidFields.includes(field) && !value.trim();
+    return (
+      <div className="min-w-0 space-y-1.5">
+        <label htmlFor={id} className="block text-sm font-medium">
+          {t(`fields.${field}`)} <span className="font-normal text-slate-300">{t("required")}</span>
+        </label>
+        {renderControl({
+          id,
+          value,
+          className: fieldClass,
+          "aria-required": true,
+          "aria-invalid": invalid,
+          "aria-describedby": invalid ? `${id}-error` : undefined
+        })}
+        {invalid && (
+          <p id={`${id}-error`} className="text-sm text-rose-200">
+            {t(field === "countryCode" ? "missingCountryCode" : "missingField")}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -232,7 +304,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
   };
 
   async function submit() {
-    setSaving(true);
+    setPendingAction("save");
     setError(null);
     try {
       const response = await fetch("/api/v1/auth/social/onboarding/submit", {
@@ -249,9 +321,9 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
         })
       });
       const data = await response.json();
-      setSaving(false);
 
       if (!response.ok) {
+        setPendingAction(null);
         if (data.message && data.message.startsWith("DNI_CONFLICT:")) {
           const parts = data.message.split(":");
           const confProvider = parts[1] || "google";
@@ -259,19 +331,19 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
           setShowDniConflictModal(true);
           return;
         }
-        setError(data.message ?? "No fue posible guardar");
+        setError(t("saveError"));
         return;
       }
 
       window.location.href = `/${locale}/pending-approval`;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar");
-      setSaving(false);
+    } catch {
+      setError(t("saveError"));
+      setPendingAction(null);
     }
   }
 
   async function handleCancel() {
-    setSaving(true);
+    setPendingAction("cancel");
     setError(null);
     try {
       const response = await fetch("/api/v1/auth/social/onboarding/cancel", {
@@ -291,7 +363,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
       await signOut({callbackUrl: `/${locale}`});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cancelar el registro");
-      setSaving(false);
+      setPendingAction(null);
     }
   }
 
@@ -302,218 +374,194 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
     >
       <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]" />
 
-      <main className="relative z-10 w-full max-w-3xl my-auto">
-        <section className="liquid-card rounded-[2rem] p-6 sm:p-8">
-          <span className="pointer-events-none absolute inset-[1px] rounded-[1.95rem] border-2 border-white/20" />
-          <span className="pointer-events-none absolute inset-[1px] rounded-[1.95rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.45),inset_0_-12px_28px_rgba(255,255,255,0.05),0_18px_40px_rgba(2,23,56,0.2)]" />
-          
-          {/* Header: Two-column layout */}
-          <div className="grid grid-cols-12 gap-5 items-center mb-6">
-            {/* Left: Avatar (5/12) */}
-            <div className="col-span-5 flex flex-col items-center justify-center py-2 select-none">
+      <main className="relative z-10 my-auto w-full max-w-xl">
+        <section className="rounded-3xl border border-white/15 bg-slate-950/80 p-5 shadow-xl backdrop-blur-md sm:p-8">
+          <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-300">{t("description")}</p>
+
+          <div className="mt-6 border-t border-white/15 pt-5">
+            <h2 id="onboarding-step" tabIndex={-1} className="text-base font-semibold text-cyan-100">
+              {t("progress", {current: step + 1, total: steps.length, title: t(currentStep.title)})}
+            </h2>
+            <div
+              role="progressbar"
+              aria-labelledby="onboarding-step"
+              aria-valuemin={0}
+              aria-valuemax={steps.length}
+              aria-valuenow={step + 1}
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15"
+            >
               <div
-                onClick={() => document.getElementById("avatar-file-input")?.click()}
-                className="h-48 w-48 rounded-full border-2 border-white/20 hover:border-purple-400 shadow-lg relative overflow-hidden group cursor-pointer bg-white/10 flex items-center justify-center transition-all duration-200"
-              >
-                {typeof form.avatar === "string" && form.avatar && (form.avatar.startsWith("http://") || form.avatar.startsWith("https://") || form.avatar.startsWith("/")) ? (
-                  <img
-                    src={form.avatar}
-                    alt="Avatar"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 text-2xl font-bold text-white uppercase">
-                    {`${form.firstName || "?"}${form.lastName || "?"}`.trim().split(/\s+/).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
-                  </div>
-                )}
-
-                <div className="absolute inset-0 bg-slate-950/50 opacity-0 group-hover:opacity-100 transition duration-200 flex flex-col items-center justify-center text-white p-1 text-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 mb-0.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0ZM18.75 10.5h.008v.008h-.008V10.5Z" />
-                  </svg>
-                  <span className="text-[9px] font-extrabold uppercase tracking-wide">Subir Foto</span>
-                </div>
-
-                {uploadingAvatar && (
-                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1px] flex items-center justify-center">
-                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-purple-500 border-t-transparent" />
-                  </div>
-                )}
-              </div>
-
-              <input
-                id="avatar-file-input"
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                className="hidden"
+                className="h-full origin-left rounded-full bg-cyan-300 transition-transform duration-200 motion-reduce:transition-none"
+                style={{transform: `scaleX(${(step + 1) / steps.length})`}}
               />
-              <span className="text-[10px] text-slate-300 font-semibold mt-2 text-center leading-tight">
-                {form.avatar ? "Imagen cargada" : "Haz clic para subir"}
-              </span>
+            </div>
+          </div>
 
-              {defaultAvatar && form.avatar !== defaultAvatar && (
+          <form noValidate onSubmit={handleStepSubmit} aria-labelledby="onboarding-step" className="mt-5">
+            <fieldset disabled={saving} className="grid min-w-0 gap-4 sm:grid-cols-2">
+              {step === 0 && (
+                <>
+                  {renderField("firstName", (props) => (
+                    <input {...props} autoComplete="given-name" onChange={(e) => setForm((p) => ({...p, firstName: e.target.value}))} />
+                  ))}
+                  {renderField("lastName", (props) => (
+                    <input {...props} autoComplete="family-name" onChange={(e) => setForm((p) => ({...p, lastName: e.target.value}))} />
+                  ))}
+                  <div className="sm:col-span-2">
+                    {renderField("dni", (props) => (
+                      <input {...props} onChange={(e) => setForm((p) => ({...p, dni: e.target.value}))} />
+                    ))}
+                  </div>
+                  {renderField("birthDate", (props) => (
+                    <input {...props} type="date" autoComplete="bday" onChange={(e) => setForm((p) => ({...p, birthDate: e.target.value}))} />
+                  ))}
+                  {renderField("gender", (props) => (
+                    <select {...props} onChange={(e) => setForm((p) => ({...p, gender: e.target.value}))}>
+                      <option value="">{t("selectOption")}</option>
+                      {genders.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                    </select>
+                  ))}
+                  <div className="flex min-w-0 items-center gap-3 border-t border-white/15 pt-4 sm:col-span-2">
+                    <div aria-hidden="true" className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-cyan-300/15 text-sm font-semibold text-cyan-100">
+                      {form.avatar && /^(https?:\/\/|\/)/.test(form.avatar) ? (
+                        <img src={form.avatar} alt="" className="size-full object-cover" />
+                      ) : (
+                        `${form.firstName[0] ?? ""}${form.lastName[0] ?? ""}`.toUpperCase() || "?"
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <label htmlFor="avatar-file-input" className="block text-sm font-medium">{t("photo")}</label>
+                      <input
+                        id="avatar-file-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                        disabled={uploadingAvatar}
+                        className="block w-full min-w-0 rounded-lg text-sm text-slate-300 file:me-2 file:rounded-lg file:border-0 file:bg-white/10 file:px-2 file:py-2 file:font-medium file:text-white focus-visible:outline-2 focus-visible:outline-cyan-300"
+                      />
+                      {uploadingAvatar && <p role="status" className="text-sm text-slate-300">{t("uploadingPhoto")}</p>}
+                      {defaultAvatar && form.avatar !== defaultAvatar && (
+                        <button
+                          type="button"
+                          disabled={uploadingAvatar}
+                          onClick={() => setForm((p) => ({...p, avatar: defaultAvatar}))}
+                          className="rounded text-sm text-cyan-200 underline underline-offset-4"
+                        >
+                          {t("useSocialPhoto")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {step === 1 && (
+                <>
+                  {renderField("country", (props) => (
+                    <select
+                      {...props}
+                      autoComplete="country"
+                      onChange={(e) => {
+                        const nextCountry = e.target.value;
+                        const selectedCountry = countries.find((item) => item.code === nextCountry);
+                        setDepartments([]);
+                        setCities([]);
+                        setForm((p) => ({
+                          ...p,
+                          country: nextCountry,
+                          countryCode: selectedCountry?.prefixArea ?? p.countryCode,
+                          department: "",
+                          city: ""
+                        }));
+                      }}
+                    >
+                      <option value="">{t("selectOption")}</option>
+                      {countries.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                    </select>
+                  ))}
+                  {renderField("department", (props) => (
+                    <select
+                      {...props}
+                      autoComplete="address-level1"
+                      onChange={(e) => {
+                        setCities([]);
+                        setForm((p) => ({...p, department: e.target.value, city: ""}));
+                      }}
+                    >
+                      <option value="">{t("selectOption")}</option>
+                      {departments.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                    </select>
+                  ))}
+                  {renderField("city", (props) => (
+                    <select {...props} autoComplete="address-level2" onChange={(e) => setForm((p) => ({...p, city: e.target.value}))}>
+                      <option value="">{t("selectOption")}</option>
+                      {cities.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+                    </select>
+                  ))}
+                  {renderField("countryCode", (props) => <input {...props} readOnly />)}
+                  {renderField("phone", (props) => (
+                    <input
+                      {...props}
+                      type="tel"
+                      autoComplete="tel-national"
+                      onChange={(e) => setForm((p) => ({...p, phone: e.target.value.replace(/\D/g, "")}))}
+                    />
+                  ))}
+                </>
+              )}
+
+              {isLastStep && (
+                <>
+                  {renderField("companyId", (props) => (
+                    <select {...props} onChange={(e) => setForm((p) => ({...p, companyId: e.target.value}))}>
+                      <option value="">{t("selectOption")}</option>
+                      {companies.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  ))}
+                  {renderField("roleId", (props) => (
+                    <select {...props} disabled={!form.companyId} onChange={(e) => setForm((p) => ({...p, roleId: e.target.value}))}>
+                      <option value="">{t(form.companyId ? "selectOption" : "selectCompanyFirst")}</option>
+                      {roles.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  ))}
+                </>
+              )}
+            </fieldset>
+
+            {error && <p role="alert" className="mt-4 rounded-xl border border-rose-300/25 bg-rose-950/60 px-3 py-2 text-sm text-rose-100">{error}</p>}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/15 pt-4">
+              <button
+                type="submit"
+                disabled={saving || uploadingAvatar}
+                className={`${buttonClass} w-full bg-cyan-300 text-slate-950 hover:bg-cyan-200 sm:w-auto`}
+              >
+                {pendingAction === "save" ? t("saving") : t(isLastStep ? "submit" : "next")}
+              </button>
+              <div className="flex flex-1 flex-wrap items-center justify-between gap-2 sm:justify-end">
+                {step > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => goToStep(step - 1)}
+                    disabled={saving}
+                    className={`${buttonClass} border border-white/20 hover:bg-white/10`}
+                  >
+                    {t("back")}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setForm(prev => ({ ...prev, avatar: defaultAvatar }));
-                  }}
-                  className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-purple-300 hover:text-purple-200 bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-0.5 rounded-full transition cursor-pointer shadow-sm"
+                  disabled={saving || uploadingAvatar}
+                  onClick={() => void handleCancel()}
+                  className={`${buttonClass} text-slate-300 hover:bg-white/10 hover:text-white`}
                 >
-                  <span>Usar foto de red social</span>
+                  {pendingAction === "cancel" ? t("cancelling") : t("cancel")}
                 </button>
-              )}
-            </div>
-
-            {/* Right: Company, DNI, Names (7/12) */}
-            <div className="col-span-7 space-y-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200 mb-1">Relum</p>
-                <h1 className="text-xl font-semibold leading-7 tracking-tight text-white lg:text-2xl lg:leading-8">Completa tu registro</h1>
-                <p className="text-xs leading-5 text-slate-300 mt-1">Tu cuenta quedará en revisión hasta que un administrador la apruebe.</p>
-              </div>
-
-              <select
-                value={form.companyId}
-                onChange={(e) => setForm((p) => ({...p, companyId: e.target.value}))}
-                className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-2.5 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-              >
-                <option value="" className="bg-slate-900 text-white">Empresa</option>
-                {companies.map((item) => (
-                  <option key={item.id} value={item.id} className="bg-slate-900 text-white">{item.name}</option>
-                ))}
-              </select>
-              <select
-                value={form.roleId}
-                onChange={(e) => setForm((p) => ({...p, roleId: e.target.value}))}
-                disabled={!form.companyId}
-                className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-2.5 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="" className="bg-slate-900 text-white">Cargo / Puesto</option>
-                {roles.map((item) => (
-                  <option key={item.id} value={item.id} className="bg-slate-900 text-white">{item.name}</option>
-                ))}
-              </select>
-              <input
-                value={form.dni}
-                onChange={(e) => setForm((p) => ({...p, dni: e.target.value}))}
-                className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-                placeholder="DNI / Identificación"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  value={form.firstName}
-                  onChange={(e) => setForm((p) => ({...p, firstName: e.target.value}))}
-                  className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-                  placeholder="Nombres"
-                />
-                <input
-                  value={form.lastName}
-                  onChange={(e) => setForm((p) => ({...p, lastName: e.target.value}))}
-                  className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-2.5 text-sm text-white placeholder-white/50 outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-                  placeholder="Apellidos"
-                />
               </div>
             </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <select
-              value={form.country}
-              onChange={(e) => {
-                const nextCountry = e.target.value;
-                const selectedCountry = countries.find((item) => item.code === nextCountry);
-                setDepartments([]);
-                setCities([]);
-                setForm((p) => ({
-                  ...p,
-                  country: nextCountry,
-                  countryCode: selectedCountry?.prefixArea ?? p.countryCode,
-                  department: "",
-                  city: ""
-                }));
-              }}
-              className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-            >
-              <option value="" className="bg-slate-900 text-white">País</option>
-              {countries.map((item) => (
-                <option key={item.code} value={item.code} className="bg-slate-900 text-white">{item.label}</option>
-              ))}
-            </select>
-            <select
-              value={form.department}
-              onChange={(e) => {
-                setCities([]);
-                setForm((p) => ({...p, department: e.target.value, city: ""}));
-              }}
-              className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-            >
-              <option value="" className="bg-slate-900 text-white">Estado/Provincia</option>
-              {departments.map((item) => (
-                <option key={item.code} value={item.code} className="bg-slate-900 text-white">{item.label}</option>
-              ))}
-            </select>
-            <select
-              value={form.city}
-              onChange={(e) => setForm((p) => ({...p, city: e.target.value}))}
-              className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-            >
-              <option value="" className="bg-slate-900 text-white">Ciudad</option>
-              {cities.map((item) => (
-                <option key={item.code} value={item.code} className="bg-slate-900 text-white">{item.label}</option>
-              ))}
-            </select>
-            <div className="grid grid-cols-[110px_1fr] gap-2">
-              <input
-                value={form.countryCode}
-                readOnly
-                className="w-full rounded-xl border border-white/5 bg-white/5 px-4 py-3 text-sm text-white/50 outline-none cursor-default"
-                placeholder="Código"
-              />
-              <input
-                value={form.phone}
-                onChange={(e) => setForm((p) => ({...p, phone: e.target.value.replace(/\D/g, "")}))}
-                className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white placeholder-white/50 outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-                placeholder="Teléfono"
-              />
-            </div>
-            <input
-              value={form.birthDate}
-              onChange={(e) => setForm((p) => ({...p, birthDate: e.target.value}))}
-              type="date"
-              className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20 [color-scheme:dark]"
-            />
-            <select
-              value={form.gender}
-              onChange={(e) => setForm((p) => ({...p, gender: e.target.value}))}
-              className="w-full rounded-xl border border-white/10 bg-white/10 hover:border-white/20 focus:border-purple-400 focus:bg-white/15 px-4 py-3 text-sm text-white outline-none transition-all focus:ring-4 focus:ring-purple-500/20"
-            >
-              <option value="" className="bg-slate-900 text-white">Género</option>
-              {genders.map((item) => (
-                <option key={item.value} value={item.value} className="bg-slate-900 text-white">{item.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {error ? <p className="mt-3 text-sm text-rose-400 font-medium">{error}</p> : null}
-
-          <div className="mt-6 flex flex-col sm:flex-row items-center gap-4">
-            <button
-              disabled={!valid || saving}
-              onClick={() => void submit()}
-              className="w-full sm:w-2/3 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 active:from-cyan-500 active:to-blue-600 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/10 transition-all duration-200 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-800 disabled:text-slate-400 disabled:shadow-none"
-            >
-              {saving ? "Guardando..." : "Guardar y enviar a revisión"}
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void handleCancel()}
-              className="w-full sm:w-1/3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500/30 px-5 py-3 font-semibold text-rose-200 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "Cancelando..." : "Cancelar"}
-            </button>
-          </div>
+            <p role="status" className="sr-only">{pendingAction === "save" ? t("saving") : ""}</p>
+          </form>
         </section>
       </main>
 

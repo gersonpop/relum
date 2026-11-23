@@ -1,9 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { getSecureItem } from "@/lib/secure-store";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 const DEFAULT_COLUMNS = ["commercialName", "taxId", "sector", "city", "status", "actions"];
+
+const companyStatusLabels: Record<string, string> = {
+  ACTIVE: "Activo",
+  TRIAL: "Prueba",
+  SUSPENDED: "Suspendido",
+  CANCELLED: "Cancelado"
+};
 
 export function CompanyManager({
   currentUserEmail,
@@ -14,6 +24,7 @@ export function CompanyManager({
   isSU?: boolean;
   currentUserCompanyId?: string;
 }) {
+  const dialogs = useTranslations("dialogs");
   const permissions = useMemo(() => {
     if (isSU) {
       return { read: true, create: true, update: true, delete: true };
@@ -38,8 +49,8 @@ export function CompanyManager({
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [openDrawer, setOpenDrawer] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drawerError, setDrawerError] = useState("");
   const [actionMode, setActionMode] = useState("edit"); // "edit" | "add"
   const [selectedRow, setSelectedRow] = useState<any>(null);
 
@@ -58,28 +69,10 @@ export function CompanyManager({
   }, []);
 
   const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
     title: string;
-    message: string;
-    onConfirm: () => void | Promise<void>;
-  }>({
-    isOpen: false,
-    title: "",
-    message: "",
-    onConfirm: () => {}
-  });
-
-  const showConfirm = (title: string, message: string, onConfirm: () => void | Promise<void>) => {
-    setConfirmModal({
-      isOpen: true,
-      title,
-      message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-      }
-    });
-  };
+    description: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const defaultForm = {
     legalName: "",
@@ -187,9 +180,25 @@ export function CompanyManager({
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!validate()) return;
+    const statusChanged = selectedRow && form.status !== (selectedRow.status || "TRIAL");
+    if (statusChanged && (form.status === "SUSPENDED" || form.status === "CANCELLED")) {
+      const suspended = form.status === "SUSPENDED";
+      const name = String(selectedRow.commercialName || selectedRow.legalName || selectedRow.id);
+      setConfirmModal({
+        title: dialogs(suspended ? "suspendCompany" : "cancelCompanySubscription"),
+        description: dialogs(suspended ? "suspendCompanyDescription" : "cancelCompanySubscriptionDescription", { name }),
+        onConfirm: saveCompany
+      });
+      return;
+    }
+    void saveCompany();
+  };
+
+  const saveCompany = async () => {
+    setDrawerError("");
     setSaving(true);
     try {
       const isEdit = actionMode === "edit" || (!isSU || !adminAllCompanies);
@@ -220,17 +229,19 @@ export function CompanyManager({
       }
       void load();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error al guardar datos", "error");
+      const message = err instanceof Error ? err.message : "Error al guardar los datos";
+      if (openDrawer) setDrawerError(message);
+      else showToast(message, "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteCompany = (id: string) => {
-    showConfirm(
-      "Eliminar Compañía",
-      "¿Estás seguro de que deseas eliminar permanentemente esta compañía? Esta acción borrará la compañía y todos sus datos relacionados.",
-      async () => {
+  const deleteCompany = (id: string, name: string) => {
+    setConfirmModal({
+      title: dialogs("deleteCompany"),
+      description: `${dialogs("deleteCompanyDescription", { name })} ${dialogs("irreversible")}`,
+      onConfirm: async () => {
         try {
           const res = await fetch("/api/v1/db/companies", {
             method: "DELETE",
@@ -248,7 +259,7 @@ export function CompanyManager({
           showToast(err instanceof Error ? err.message : "No se pudo eliminar", "error");
         }
       }
-    );
+    });
   };
 
   const openAddDrawer = () => {
@@ -256,8 +267,8 @@ export function CompanyManager({
     setSelectedRow(null);
     setForm(defaultForm);
     setFormErrors({});
+    setDrawerError("");
     setOpenDrawer(true);
-    setTimeout(() => setDrawerVisible(true), 25);
   };
 
   const openEditDrawer = (row: any) => {
@@ -279,16 +290,13 @@ export function CompanyManager({
       status: row.status || "TRIAL"
     });
     setFormErrors({});
+    setDrawerError("");
     setOpenDrawer(true);
-    setTimeout(() => setDrawerVisible(true), 25);
   };
 
   const closeDrawer = () => {
-    setDrawerVisible(false);
-    setTimeout(() => {
-      setOpenDrawer(false);
-      setSelectedRow(null);
-    }, 200);
+    setOpenDrawer(false);
+    setSelectedRow(null);
   };
 
   const filteredRows = useMemo(() => {
@@ -329,30 +337,12 @@ export function CompanyManager({
         ))}
       </div>
 
-      {/* Confirm Modal */}
-      {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px] p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-800">{confirmModal.title}</h3>
-            <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmModal.onConfirm}
-                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
+      {confirmModal && (
+        <ConfirmDialog
+          {...confirmModal}
+          confirmLabel={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+        />
       )}
 
       {/* Header and Switches */}
@@ -416,8 +406,8 @@ export function CompanyManager({
                 className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none focus:border-blue-400 transition"
               >
                 <option value="all">Todos los estados</option>
-                <option value="ACTIVE">Activo (ACTIVE)</option>
-                <option value="TRIAL">Prueba (TRIAL)</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="TRIAL">Prueba</option>
                 <option value="SUSPENDED">Suspendido</option>
                 <option value="CANCELLED">Cancelado</option>
               </select>
@@ -438,7 +428,7 @@ export function CompanyManager({
               <thead className="bg-slate-50 text-left text-slate-600 font-medium sticky top-0 z-10 border-b border-slate-200 select-none">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Compañía</th>
-                  <th className="px-4 py-3 font-semibold">Tax ID / NIT</th>
+                  <th className="px-4 py-3 font-semibold">NIT</th>
                   <th className="px-4 py-3 font-semibold">Sector</th>
                   <th className="px-4 py-3 font-semibold">Ubicación</th>
                   <th className="px-4 py-3 font-semibold">Estado</th>
@@ -467,7 +457,7 @@ export function CompanyManager({
                             ? "bg-cyan-50 text-cyan-700 border-cyan-200"
                             : "bg-rose-50 text-rose-700 border-rose-200"
                       }`}>
-                        {r.status}
+                        {companyStatusLabels[r.status] ?? "—"}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -476,18 +466,22 @@ export function CompanyManager({
                           <button
                             type="button"
                             onClick={() => openEditDrawer(r)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition"
+                            aria-label={dialogs("edit")}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition"
                           >
-                            ✏️
+                            <span aria-hidden="true">✏️</span>
+                            <span className="hidden sm:inline">{dialogs("edit")}</span>
                           </button>
                         )}
                         {permissions.delete && (
                           <button
                             type="button"
-                            onClick={() => deleteCompany(r.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition"
+                            onClick={() => deleteCompany(r.id, r.commercialName || r.legalName || r.id)}
+                            aria-label={dialogs("delete")}
+                            className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition"
                           >
-                            🗑️
+                            <span aria-hidden="true">🗑️</span>
+                            <span className="hidden sm:inline">{dialogs("delete")}</span>
                           </button>
                         )}
                       </div>
@@ -561,7 +555,7 @@ export function CompanyManager({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Identificación Fiscal / NIT</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Identificación tributaria (NIT)</label>
               <input
                 type="text"
                 value={form.taxId}
@@ -675,8 +669,8 @@ export function CompanyManager({
                 disabled={true} // Non-SU cannot edit status directly (it's managed by billing/SU)
                 className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none disabled:text-slate-500 select-none cursor-not-allowed"
               >
-                <option value="ACTIVE">Activo (ACTIVE)</option>
-                <option value="TRIAL">Prueba (TRIAL)</option>
+                <option value="ACTIVE">Activo</option>
+                <option value="TRIAL">Prueba</option>
                 <option value="SUSPENDED">Suspendido</option>
                 <option value="CANCELLED">Cancelado</option>
               </select>
@@ -699,40 +693,22 @@ export function CompanyManager({
 
       {/* Drawer overlay for SU (Adding/Editing a company record) */}
       {openDrawer && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className={`absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] transition-opacity duration-200 ${
-              drawerVisible ? "opacity-100" : "opacity-0"
-            }`}
-            onClick={closeDrawer}
-          />
-          <aside
-            className={`absolute right-0 top-0 h-full w-full max-w-lg bg-white p-6 shadow-2xl transition-transform duration-200 ease-out overflow-y-auto ${
-              drawerVisible ? "translate-x-0" : "translate-x-full"
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">
-                  {actionMode === "add" ? "Agregar Compañía" : "Editar Compañía"}
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Completa los campos comerciales de la compañía
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="text-2xl text-slate-400 hover:text-slate-600"
-              >
-                ×
-              </button>
-            </div>
-
+        <Dialog
+          title={actionMode === "add" ? "Agregar compañía" : "Editar compañía"}
+          onClose={closeDrawer}
+          placement="side"
+          className="max-w-lg"
+          dismissible={!saving}
+        >
+          <div className="space-y-5">
+            <p className="text-xs text-slate-500">
+              Completa los campos comerciales de la compañía.
+            </p>
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nombre Comercial*</label>
+                <label htmlFor="company-editor-commercial-name" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Nombre comercial *</label>
                 <input
+                  id="company-editor-commercial-name"
                   type="text"
                   value={form.commercialName}
                   onChange={(e) => setForm((prev) => ({ ...prev, commercialName: e.target.value }))}
@@ -746,8 +722,9 @@ export function CompanyManager({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Razón Social</label>
+                <label htmlFor="company-editor-legal-name" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Razón social</label>
                 <input
+                  id="company-editor-legal-name"
                   type="text"
                   value={form.legalName}
                   onChange={(e) => setForm((prev) => ({ ...prev, legalName: e.target.value }))}
@@ -757,8 +734,9 @@ export function CompanyManager({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Identificación Fiscal / NIT</label>
+                  <label htmlFor="company-editor-tax-id" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Identificación tributaria (NIT)</label>
                   <input
+                    id="company-editor-tax-id"
                     type="text"
                     value={form.taxId}
                     onChange={(e) => setForm((prev) => ({ ...prev, taxId: e.target.value }))}
@@ -766,8 +744,9 @@ export function CompanyManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sector Comercial</label>
+                  <label htmlFor="company-editor-sector" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sector comercial</label>
                   <select
+                    id="company-editor-sector"
                     value={form.sector}
                     onChange={(e) => setForm((prev) => ({ ...prev, sector: e.target.value }))}
                     className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-cyan-500 bg-white"
@@ -787,8 +766,9 @@ export function CompanyManager({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">País</label>
+                  <label htmlFor="company-editor-country" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">País</label>
                   <input
+                    id="company-editor-country"
                     type="text"
                     value={form.country}
                     onChange={(e) => setForm((prev) => ({ ...prev, country: e.target.value }))}
@@ -796,8 +776,9 @@ export function CompanyManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Ciudad</label>
+                  <label htmlFor="company-editor-city" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Ciudad</label>
                   <input
+                    id="company-editor-city"
                     type="text"
                     value={form.city}
                     onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
@@ -807,8 +788,9 @@ export function CompanyManager({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Dirección Física</label>
+                <label htmlFor="company-editor-address" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Dirección</label>
                 <input
+                  id="company-editor-address"
                   type="text"
                   value={form.address}
                   onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
@@ -818,8 +800,9 @@ export function CompanyManager({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Teléfono</label>
+                  <label htmlFor="company-editor-phone" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Teléfono</label>
                   <input
+                    id="company-editor-phone"
                     type="text"
                     value={form.phone}
                     onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
@@ -827,8 +810,9 @@ export function CompanyManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">WhatsApp</label>
+                  <label htmlFor="company-editor-whatsapp" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">WhatsApp</label>
                   <input
+                    id="company-editor-whatsapp"
                     type="text"
                     value={form.whatsapp}
                     onChange={(e) => setForm((prev) => ({ ...prev, whatsapp: e.target.value }))}
@@ -839,8 +823,9 @@ export function CompanyManager({
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Email</label>
+                  <label htmlFor="company-editor-email" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Correo electrónico</label>
                   <input
+                    id="company-editor-email"
                     type="email"
                     value={form.email}
                     onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
@@ -848,8 +833,9 @@ export function CompanyManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sitio Web</label>
+                  <label htmlFor="company-editor-website" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sitio web</label>
                   <input
+                    id="company-editor-website"
                     type="text"
                     value={form.website}
                     onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))}
@@ -859,23 +845,26 @@ export function CompanyManager({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Estado de Suscripción</label>
+                <label htmlFor="company-editor-status" className="block text-xs font-bold text-slate-500 uppercase tracking-wide">Estado de suscripción</label>
                 <select
+                  id="company-editor-status"
                   value={form.status}
                   onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
                   className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-cyan-500"
                 >
-                  <option value="ACTIVE">Activo (ACTIVE)</option>
-                  <option value="TRIAL">Prueba (TRIAL)</option>
+                  <option value="ACTIVE">Activo</option>
+                  <option value="TRIAL">Prueba</option>
                   <option value="SUSPENDED">Suspendido</option>
                   <option value="CANCELLED">Cancelado</option>
                 </select>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              {drawerError && <p role="alert" className="text-sm text-rose-700">{drawerError}</p>}
+              <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={closeDrawer}
+                  disabled={saving}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50 transition"
                 >
                   Cancelar
@@ -889,8 +878,8 @@ export function CompanyManager({
                 </button>
               </div>
             </form>
-          </aside>
-        </div>
+          </div>
+        </Dialog>
       )}
     </section>
   );

@@ -3,6 +3,8 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useTranslations} from "next-intl";
 import {getSecureItem} from "@/lib/secure-store";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 type Props = {
   actorId: string;
@@ -13,6 +15,7 @@ type Props = {
 const DEFAULT_COLUMNS = ["id", "name", "value", "type", "actions"];
 
 export function DataManager({actorId, actorRole, companyId}: Props) {
+  const dialogs = useTranslations("dialogs");
   const t = useTranslations("AccountConfig");
   const permissions = useMemo(() => {
     if (actorRole === "SU") {
@@ -61,8 +64,9 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS));
   const [openDrawer, setOpenDrawer] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drawerError, setDrawerError] = useState("");
+  const [categoryError, setCategoryError] = useState("");
   const [actionMode, setActionMode] = useState("add");
   const [selectedRow, setSelectedRow] = useState<any>(null);
   const [newType, setNewType] = useState({type: "", typeDescription: "", typeUse: ""});
@@ -73,38 +77,10 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
     title: string;
-    message: string;
-    onConfirm: () => void | Promise<void>;
-    confirmLabel?: string;
-    confirmVariant?: "danger" | "warning";
-  }>({
-    isOpen: false,
-    title: "",
-    message: "",
-    onConfirm: () => {}
-  });
-
-  const showConfirm = (
-    title: string,
-    message: string,
-    onConfirm: () => void | Promise<void>,
-    confirmLabel = "Confirmar",
-    confirmVariant: "danger" | "warning" = "danger"
-  ) => {
-    setConfirmModal({
-      isOpen: true,
-      title,
-      message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({...prev, isOpen: false}));
-      },
-      confirmLabel,
-      confirmVariant
-    });
-  };
+    description: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const headers = useMemo(
     () => ({
@@ -137,7 +113,7 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
     try {
       const response = await fetch("/api/v1/db/st_multidata", {headers});
       const body = await response.json();
-      if (!response.ok) throw new Error(body?.message || "No se pudo cargar multidata");
+      if (!response.ok) throw new Error(body?.message || "No se pudieron cargar los datos");
       const data = Array.isArray(body?.data) ? body.data : [];
       setRows(data);
       const defaultLanguage = data.find((row: any) => String(row?.type || "") === "language")?.value;
@@ -250,16 +226,19 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
   };
 
   const openAddDrawer = () => {
+    setDrawerError("");
+    setCategoryError("");
     setActionMode("add");
     setSelectedRow(null);
     setNewType({type: "", typeDescription: "", typeUse: ""});
     setForm({Initials_PK: "", name: "", value: "", type: "", typeDescription: "", typeUse: "", language: language === "all" ? String(languageOptions[0]?.value || "") : language});
     setLocalCategories([]);
     setOpenDrawer(true);
-    window.setTimeout(() => setDrawerVisible(true), 10);
   };
 
   const openEditDrawer = (row: any) => {
+    setDrawerError("");
+    setCategoryError("");
     setActionMode("edit");
     setSelectedRow(row);
     setNewType({
@@ -278,20 +257,16 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
     });
     setLocalCategories([]);
     setOpenDrawer(true);
-    window.setTimeout(() => setDrawerVisible(true), 10);
   };
 
-  const closeDrawer = () => {
-    setDrawerVisible(false);
-    window.setTimeout(() => setOpenDrawer(false), 220);
-  };
+  const closeDrawer = () => setOpenDrawer(false);
 
   const addCategory = () => {
     if (!newType.type.trim() || !newType.typeDescription.trim() || !newType.typeUse.trim()) {
-      setError("Completa nombre, descripcion y tipo de uso para agregar categoria.");
+      setCategoryError("Completa el nombre, la descripción y el tipo de uso para agregar la categoría.");
       return;
     }
-    setError("");
+    setCategoryError("");
     const addedCat = {
       type: newType.type.trim(),
       typeDescription: newType.typeDescription.trim(),
@@ -314,11 +289,11 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
   const saveItem = async () => {
     const required = [form.Initials_PK, form.name, form.value, form.type].every((item) => String(item).trim().length > 0);
     if (!required) {
-      setError("Completa Iniciales, Nombre, Valor y Categoria.");
+      setDrawerError("Completa las iniciales, el nombre, el valor y la categoría.");
       return;
     }
     setSaving(true);
-    setError("");
+    setDrawerError("");
     try {
       if (actionMode === "edit" && selectedRow) {
         const response = await fetch("/api/v1/db/st_multidata", {
@@ -340,17 +315,17 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
       closeDrawer();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo guardar");
+      setDrawerError(err instanceof Error ? err.message : "No se pudo guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteItem = async (valueId: any) => {
-    showConfirm(
-      "¿Eliminar este registro?",
-      "Esta acción es irreversible y removerá el registro del catálogo auxiliar. ¿Deseas continuar?",
-      async () => {
+  const deleteItem = (valueId: unknown, name: string) => {
+    setConfirmModal({
+      title: dialogs("deleteValue"),
+      description: `${dialogs("deleteValueDescription", { name })} ${dialogs("irreversible")}`,
+      onConfirm: async () => {
         setError("");
         try {
           const response = await fetch("/api/v1/db/st_multidata", {
@@ -364,10 +339,8 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
         } catch (err) {
           setError(err instanceof Error ? err.message : "No se pudo eliminar");
         }
-      },
-      "Eliminar",
-      "danger"
-    );
+      }
+    });
   };
 
   const toggleColumn = (columnKey: string) => {
@@ -413,7 +386,7 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
               ))}
             </select>
             <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm">
-              <option value="all">Categoria</option>
+              <option value="all">Categoría</option>
               {categoryOptions.map((item) => (
                 <option key={item.type} value={item.type}>{item.type}</option>
               ))}
@@ -491,39 +464,33 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
                             <div className="flex items-center justify-center gap-1.5">
                               {/* Editar (Lápiz Azul) */}
                               {permissions.update && (
-                                <div className="group relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => openEditDrawer(row)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
-                                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                                      <path d="m15 5 4 4" />
-                                    </svg>
-                                  </button>
-                                  <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                    {t("actions.edit")}
-                                  </span>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openEditDrawer(row)}
+                                  aria-label={dialogs("edit")}
+                                  className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
+                                >
+                                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
+                                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                    <path d="m15 5 4 4" />
+                                  </svg>
+                                  <span className="hidden sm:inline">{dialogs("edit")}</span>
+                                </button>
                               )}
 
                               {/* Eliminar (Basura Roja) */}
                               {permissions.delete && (
-                                <div className="group relative">
-                                  <button
-                                    type="button"
-                                    onClick={() => void deleteItem(row?.value)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                    </svg>
-                                  </button>
-                                  <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                    Eliminar
-                                  </span>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteItem(row?.value, String(row?.name || row?.value || "—"))}
+                                  aria-label={dialogs("delete")}
+                                  className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
+                                >
+                                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                  </svg>
+                                  <span className="hidden sm:inline">{dialogs("delete")}</span>
+                                </button>
                               )}
                             </div>
                           </td>
@@ -555,57 +522,67 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
       ) : null}
 
       {openDrawer ? (
-        <div className="fixed inset-0 z-50">
-          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${drawerVisible ? "opacity-100" : "opacity-0"}`} onClick={closeDrawer} />
-          <aside className={`absolute right-0 top-0 h-full w-full max-w-[560px] bg-white p-5 shadow-2xl transition-transform duration-200 ease-out ${drawerVisible ? "translate-x-0" : "translate-x-full"}`}>
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-3xl font-semibold">{actionMode === "edit" ? "Editar Item" : "Agregar Item"}</h2>
-                <p className="mt-1 text-sm text-slate-500">Realiza cambios en el registro y presiona Guardar.</p>
-              </div>
-              <button type="button" onClick={closeDrawer} className="text-2xl text-slate-400 hover:text-slate-600">×</button>
-            </div>
-
-            <div className="mt-6 border-t border-slate-200 pt-5">
-              <h3 className="text-center text-3xl font-medium">Agregar nueva categoria</h3>
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-5">
+        <Dialog
+          title={actionMode === "edit" ? "Editar registro" : "Agregar registro"}
+          onClose={closeDrawer}
+          placement="side"
+          className="max-w-[560px]"
+          dismissible={!saving}
+        >
+          <p className="text-sm text-slate-500">Realiza cambios en el registro y presiona Guardar.</p>
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-semibold">Agregar categoría</h3>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-5">
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700 sm:col-span-3">
+                Nombre de la categoría
                 <input
                   value={newType.type}
                   onChange={(event) => setNewType((prev) => ({...prev, type: event.target.value}))}
-                  placeholder="Nombre de la categoria"
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm sm:col-span-3"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
                 />
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700 sm:col-span-2">
+                {t("table.typeUse")}
                 <select
                   value={newType.typeUse}
                   onChange={(event) => setNewType((prev) => ({...prev, typeUse: event.target.value}))}
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm sm:col-span-2"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
                 >
-                  <option value="">Tipo de uso</option>
+                  <option value="">—</option>
                   {typeUseOptions.map((item) => (
                     <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-5">
+              </label>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-5">
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700 sm:col-span-4">
+                {t("table.typeDescription")}
                 <input
                   value={newType.typeDescription}
                   onChange={(event) => setNewType((prev) => ({...prev, typeDescription: event.target.value}))}
-                  placeholder="Descrip. categoria"
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm sm:col-span-4"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
                 />
-                <button type="button" onClick={addCategory} className="rounded-2xl bg-amber-400 px-4 py-2 text-sm font-medium text-slate-900 sm:col-span-1">Agregar</button>
-              </div>
+              </label>
+              <button type="button" onClick={addCategory} className="self-end rounded-2xl bg-amber-400 px-3 py-2 text-sm font-medium text-slate-900 sm:col-span-1">Agregar</button>
             </div>
+            {categoryError && <p role="alert" className="mt-3 text-sm text-rose-700">{categoryError}</p>}
+          </div>
 
-            <div className="mt-6 border-t border-slate-200 pt-5">
-              <h3 className="text-center text-3xl font-medium">Agregar nuevo registro</h3>
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <select value={form.language} onChange={(event) => setFormField("language", event.target.value)} className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm">
-                  <option value="">Idioma</option>
+          <div className="mt-6 border-t border-slate-200 pt-5">
+            <h3 className="text-sm font-semibold">Datos del registro</h3>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                Idioma
+                <select value={form.language} onChange={(event) => setFormField("language", event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm">
+                  <option value="">—</option>
                   {languageOptions.map((item) => (
                     <option key={String(item?.value || "")} value={String(item?.value || "")}>{String(item?.name || "")}</option>
                   ))}
                 </select>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.type")}
                 <select
                   value={form.type}
                   onChange={(event) => {
@@ -617,108 +594,88 @@ export function DataManager({actorId, actorRole, companyId}: Props) {
                       typeUse: selected?.typeUse || ""
                     }));
                   }}
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
                 >
-                  <option value="">Categoria</option>
+                  <option value="">—</option>
                   {categoryOptions.map((item) => (
                     <option key={item.type} value={item.type}>{item.type}</option>
                   ))}
                 </select>
-                <input value={form.typeUse} readOnly placeholder="Tipo de uso" className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-500" />
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <input
-                    list="initials-options"
-                    value={form.Initials_PK}
-                    onChange={(event) => setFormField("Initials_PK", event.target.value)}
-                    placeholder="Iniciales"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
-                  />
-                  <datalist id="initials-options">
-                    {filteredTypeRowsForForm.map((item) => (
-                      <option key={`i-${String(item?.value || "")}-${String(item?.Initials_PK || "")}`} value={String(item?.Initials_PK || "")} />
-                    ))}
-                  </datalist>
-                </div>
-                <input value={form.typeDescription} readOnly placeholder="Descrip. categoria" className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-500" />
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <input
-                    list="name-options"
-                    value={form.name}
-                    onChange={(event) => setFormField("name", event.target.value)}
-                    placeholder="Nombre"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
-                  />
-                  <datalist id="name-options">
-                    {filteredTypeRowsForForm.map((item) => (
-                      <option key={`n-${String(item?.value || "")}-${String(item?.name || "")}`} value={String(item?.name || "")} />
-                    ))}
-                  </datalist>
-                </div>
-                <div>
-                  <input
-                    list="value-options"
-                    value={form.value}
-                    onChange={(event) => setFormField("value", event.target.value)}
-                    placeholder="Valor"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
-                  />
-                  <datalist id="value-options">
-                    {filteredTypeRowsForForm.map((item) => (
-                      <option key={`v-${String(item?.value || "")}-${String(item?.name || "")}`} value={String(item?.value || "")} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.typeUse")}
+                <input value={form.typeUse} readOnly className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-500" />
+              </label>
             </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={closeDrawer} className="rounded-xl px-4 py-2 text-sm text-rose-600">Cancelar</button>
-              <button type="button" disabled={saving} onClick={saveItem} className="rounded-2xl bg-blue-600 px-6 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando..." : actionMode === "edit" ? "Guardar" : "Crear"}</button>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.Initials_PK")}
+                <input
+                  list="initials-options"
+                  value={form.Initials_PK}
+                  onChange={(event) => setFormField("Initials_PK", event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
+                />
+                <datalist id="initials-options">
+                  {filteredTypeRowsForForm.map((item) => (
+                    <option key={`i-${String(item?.value || "")}-${String(item?.Initials_PK || "")}`} value={String(item?.Initials_PK || "")} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.typeDescription")}
+                <input value={form.typeDescription} readOnly className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-500" />
+              </label>
             </div>
-          </aside>
-        </div>
-      ) : null}
 
-      {confirmModal.isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))} />
-          <div className="relative z-10 w-full max-w-md transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col items-center text-center">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-full ${confirmModal.confirmVariant === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"} mb-4`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">{confirmModal.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmModal.onConfirm();
-                }}
-                className={`rounded-xl ${confirmModal.confirmVariant === "danger" ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-amber-500 hover:bg-amber-600 text-slate-900"} px-5 py-2.5 text-sm font-semibold transition shadow-sm`}
-              >
-                {confirmModal.confirmLabel}
-              </button>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.name")}
+                <input
+                  list="name-options"
+                  value={form.name}
+                  onChange={(event) => setFormField("name", event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
+                />
+                <datalist id="name-options">
+                  {filteredTypeRowsForForm.map((item) => (
+                    <option key={`n-${String(item?.value || "")}-${String(item?.name || "")}`} value={String(item?.name || "")} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs font-medium text-slate-700">
+                {t("table.value")}
+                <input
+                  list="value-options"
+                  value={form.value}
+                  onChange={(event) => setFormField("value", event.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
+                />
+                <datalist id="value-options">
+                  {filteredTypeRowsForForm.map((item) => (
+                    <option key={`v-${String(item?.value || "")}-${String(item?.name || "")}`} value={String(item?.value || "")} />
+                  ))}
+                </datalist>
+              </label>
             </div>
           </div>
-        </div>
+
+          {drawerError && <p role="alert" className="mt-4 text-sm text-rose-700">{drawerError}</p>}
+          <div className="mt-6 flex flex-wrap justify-end gap-3">
+            <button type="button" onClick={closeDrawer} disabled={saving} className="rounded-xl px-4 py-2 text-sm text-slate-700 disabled:opacity-50">Cancelar</button>
+            <button type="button" disabled={saving} onClick={saveItem} className="rounded-2xl bg-blue-600 px-6 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando..." : actionMode === "edit" ? "Guardar" : "Crear"}</button>
+          </div>
+        </Dialog>
       ) : null}
+
+      {confirmModal && (
+        <ConfirmDialog
+          {...confirmModal}
+          confirmLabel={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
 
       {/* Toasts Container */}
       <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 max-w-md w-full pointer-events-none items-center px-4">

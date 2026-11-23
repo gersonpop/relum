@@ -4,6 +4,8 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {useTranslations} from "next-intl";
 import {useRouter} from "next/navigation";
 import {getSecureItem, setSecureItem} from "@/lib/secure-store";
+import {ConfirmDialog} from "@/components/ui/confirm-dialog";
+import {Dialog} from "@/components/ui/dialog";
 
 type RoleItem = {
   id: string;
@@ -76,6 +78,7 @@ const defaultForm = {
 };
 
 export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
+  const dialogs = useTranslations("dialogs");
   const t = useTranslations("AccountConfig");
   const router = useRouter();
 
@@ -119,7 +122,6 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_VISIBLE_COLUMNS));
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formDrawerVisible, setFormDrawerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,37 +160,17 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof typeof defaultForm, string>>>({});
 
   const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
     title: string;
     message: string;
     onConfirm: () => void | Promise<void>;
-    confirmLabel?: string;
-    confirmVariant?: "danger" | "warning";
-  }>({
-    isOpen: false,
-    title: "",
-    message: "",
-    onConfirm: () => {}
-  });
+  } | null>(null);
 
   const showConfirm = (
     title: string,
     message: string,
-    onConfirm: () => void | Promise<void>,
-    confirmLabel = "Confirmar",
-    confirmVariant: "danger" | "warning" = "danger"
+    onConfirm: () => void | Promise<void>
   ) => {
-    setConfirmModal({
-      isOpen: true,
-      title,
-      message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({...prev, isOpen: false}));
-      },
-      confirmLabel,
-      confirmVariant
-    });
+    setConfirmModal({ title, message, onConfirm });
   };
 
   const pageSize = rowsPerPage;
@@ -217,7 +199,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   const loadData = useCallback(async () => {
     setLoading(true);
     setProgress(0);
-    setLoadingMessage("Iniciando conexión con la base de datos...");
+    setLoadingMessage("Preparando los datos…");
     try {
       // 1. Modules
       setLoadingMessage("Cargando catálogo de módulos del sistema...");
@@ -235,7 +217,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
       const scopesRes = await fetch("/api/v1/db/st_multidata", {headers});
       setProgress(55);
       const scopesBody = await scopesRes.json();
-      if (!scopesRes.ok) throw new Error(scopesBody.message ?? "No se pudieron cargar los scopes");
+      if (!scopesRes.ok) throw new Error(scopesBody.message ?? "No se pudieron cargar los alcances");
       const rawScopes = (scopesBody.data ?? []) as ScopeCatalogItem[];
       const roleScopes = rawScopes.filter(isRoleScope).map(normalizeScopeItem).filter((item): item is ScopeItem => item !== null);
       setScopes(roleScopes);
@@ -345,11 +327,11 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   const tableColumns = useMemo(
     () => {
       const cols = [
-        {key: "id", label: "ID"},
+        {key: "id", label: "Identificador"},
         {key: "key_id", label: "Sigla"},
         {key: "name", label: "Nombre"},
         {key: "description", label: "Descripción"},
-        {key: "scope", label: "Alcance (Scope)"}
+        {key: "scope", label: "Alcance"}
       ];
       if (actorRole === "SU") {
         cols.push({key: "company_id", label: "Empresa"});
@@ -392,12 +374,10 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   function openCreateForm() {
     clearFormState();
     setIsFormOpen(true);
-    window.setTimeout(() => setFormDrawerVisible(true), 10);
   }
 
   function onEdit(item: RoleItem) {
     setIsFormOpen(true);
-    window.setTimeout(() => setFormDrawerVisible(true), 10);
     setEditingId(item.id);
     setForm({
       key_id: item.key_id,
@@ -410,8 +390,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   }
 
   function closeFormDrawer() {
-    setFormDrawerVisible(false);
-    window.setTimeout(() => setIsFormOpen(false), 220);
+    setIsFormOpen(false);
   }
 
   const getModuleName = (mId: string) => {
@@ -601,7 +580,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
         })
       });
       setProgress(60);
-      setLoadingMessage("Replicando permisos y configuraciones en la base de datos...");
+      setLoadingMessage("Copiando permisos y configuración…");
       const body = await response.json();
       if (!response.ok) throw new Error(body.message ?? "No se pudo copiar el cargo");
       
@@ -666,8 +645,8 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
 
   async function onDelete(item: RoleItem) {
     showConfirm(
-      "¿Eliminar este cargo?",
-      `Esta acción eliminará el cargo ${item.name} de forma permanente y removerá todos los privilegios asociados. ¿Deseas continuar?`,
+      dialogs("deletePosition"),
+      `${dialogs("deletePositionDescription", {name: item.name})} ${dialogs("irreversible")}`,
       async () => {
         setSaving(true);
         try {
@@ -686,9 +665,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
         } finally {
           setSaving(false);
         }
-      },
-      "Eliminar",
-      "danger"
+      }
     );
   }
 
@@ -702,6 +679,59 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
   }
 
 
+
+  const toastItems = toasts.map((toast) => (
+    <div
+      key={toast.id}
+      className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border transition-all duration-300 pointer-events-auto transform translate-y-0 ${
+        toast.type === "success"
+          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+          : toast.type === "warning"
+          ? "bg-amber-50 border-amber-200 text-amber-800"
+          : toast.type === "info"
+          ? "bg-blue-50 border-blue-200 text-blue-800"
+          : "bg-rose-50 border-rose-200 text-rose-800"
+      }`}
+    >
+      {toast.type === "success" && (
+        <svg className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )}
+      {toast.type === "warning" && (
+        <svg className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      )}
+      {toast.type === "info" && (
+        <svg className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )}
+      {toast.type === "error" && (
+        <svg className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )}
+      <div className="flex-1 text-sm font-medium">{toast.message}</div>
+      <button
+        type="button"
+        aria-label={dialogs("close")}
+        onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+        className="text-slate-400 hover:text-slate-600 transition shrink-0"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  ));
+
+  const dialogToasts = (
+    <div className="sticky top-0 z-20 flex flex-col gap-2 pointer-events-none" aria-live="polite">
+      {toastItems}
+    </div>
+  );
 
   return (
     <section className="flex-1 flex flex-col min-h-0 overflow-hidden text-slate-700 bg-white rounded-2xl border border-slate-200 p-4 sm:p-5">
@@ -844,56 +874,44 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
                         <td key={`${item.id}-actions`} className="px-4 py-3">
                           <div className="flex items-center justify-center gap-1.5">
                             {item.company_id !== companyId ? (
-                              <div className="group relative">
-                                <button
-                                  type="button"
-                                  onClick={() => setCopyModalRole(item)}
-                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-600 shadow-sm hover:bg-cyan-100 hover:border-cyan-300 hover:text-cyan-700 transition duration-150 text-xs font-semibold"
-                                  title="Copiar Cargo a mi Empresa"
-                                >
-                                  📋
-                                </button>
-                                <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                  Copiar
-                                </span>
-                              </div>
+                              <button
+                                type="button"
+                                aria-label={dialogs("copyPosition")}
+                                onClick={() => setCopyModalRole(item)}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-semibold rounded-lg border border-cyan-200 bg-cyan-50 text-cyan-600 shadow-sm hover:bg-cyan-100 hover:border-cyan-300 hover:text-cyan-700 transition duration-150"
+                              >
+                                <span aria-hidden="true">📋</span>
+                                <span className="hidden sm:inline">{dialogs("copyPosition")}</span>
+                              </button>
                             ) : (
                               <>
-                                {/* Editar (Lápiz Azul) */}
                                 {permissions.update ? (
-                                  <div className="group relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => onEdit(item)}
-                                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
-                                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                                        <path d="m15 5 4 4" />
-                                      </svg>
-                                    </button>
-                                    <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                      Editar
-                                    </span>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    aria-label={dialogs("edit")}
+                                    onClick={() => onEdit(item)}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-semibold rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
+                                  >
+                                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
+                                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                      <path d="m15 5 4 4" />
+                                    </svg>
+                                    <span className="hidden sm:inline">{dialogs("edit")}</span>
+                                  </button>
                                 ) : null}
 
-                                {/* Eliminar (Basura Roja) */}
                                 {permissions.delete ? (
-                                  <div className="group relative">
-                                    <button
-                                      type="button"
-                                      onClick={() => void onDelete(item)}
-                                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                      </svg>
-                                    </button>
-                                    <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                      Eliminar
-                                    </span>
-                                  </div>
+                                  <button
+                                    type="button"
+                                    aria-label={dialogs("delete")}
+                                    onClick={() => void onDelete(item)}
+                                    className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-semibold rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
+                                  >
+                                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                    </svg>
+                                    <span className="hidden sm:inline">{dialogs("delete")}</span>
+                                  </button>
                                 ) : null}
                               </>
                             )}
@@ -925,16 +943,15 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
       </article>
 
       {isFormOpen ? (
-        <div className="fixed inset-0 z-50">
-          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${formDrawerVisible ? "opacity-100" : "opacity-0"}`} onClick={closeFormDrawer} />
-          <aside className={`absolute right-0 top-0 h-full w-full max-w-[520px] overflow-y-auto bg-white p-5 shadow-2xl transition-transform duration-200 ease-out ${formDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
-            <div className="mb-6 flex items-start justify-between">
-              <div>
-                <h3 className="text-3xl font-semibold">{editingId ? "Editar Cargo" : "Crear Cargo"}</h3>
-                <p className="text-sm text-slate-500">Configura los parámetros del cargo con persistencia en tiempo real.</p>
-              </div>
-              <button type="button" onClick={closeFormDrawer} className="text-2xl text-slate-400 hover:text-slate-700">×</button>
-            </div>
+        <Dialog
+          title={editingId ? dialogs("editPosition") : dialogs("createPosition")}
+          placement="side"
+          onClose={closeFormDrawer}
+          className="max-w-[520px]"
+        >
+          <div className="min-w-0">
+            {dialogToasts}
+            <p className="text-sm text-slate-500">Configura el nombre, el alcance y la descripción del cargo.</p>
 
             <div className="mt-4 space-y-4">
               <div>
@@ -961,7 +978,7 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-500">Alcance (Scope)</label>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Alcance</label>
                 <select
                   value={form.scope}
                   onChange={(e) => setForm((s) => ({...s, scope: e.target.value}))}
@@ -1021,114 +1038,82 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
                 {saving ? "Guardando..." : editingId ? "Guardar Cambios" : "Crear Cargo"}
               </button>
             </div>
-          </aside>
-        </div>
+          </div>
+        </Dialog>
       ) : null}
 
-      {confirmModal.isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))} />
-          <div className="relative z-10 w-full max-w-md transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600 mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">{confirmModal.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmModal.onConfirm();
-                }}
-                className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 text-sm font-semibold transition shadow-sm"
-              >
-                {confirmModal.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+      {confirmModal ? (
+        <ConfirmDialog
+          title={confirmModal.title}
+          description={confirmModal.message}
+          confirmLabel={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+          onConfirm={confirmModal.onConfirm}
+        />
       ) : null}
 
       {copyModalRole ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setCopyModalRole(null)} />
-          <div className="relative z-10 w-full max-w-lg transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-150 pb-3">
-                <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                  <span>📋 Copiar Cargo del Sistema</span>
-                </h3>
-                <button type="button" onClick={() => setCopyModalRole(null)} className="text-xl font-bold text-slate-400 hover:text-slate-700">×</button>
+        <Dialog
+          title={dialogs("copyPosition")}
+          onClose={() => setCopyModalRole(null)}
+          dismissible={!saving}
+          className="max-w-lg"
+        >
+          <div className="mt-4">
+            {dialogToasts}
+            <p className="text-sm text-slate-650">
+              ¿Deseas copiar el cargo <strong className="text-slate-800">{copyModalRole.name}</strong> a tu empresa?
+            </p>
+            <p className="mt-1.5 text-xs text-slate-500">
+              Se creará un nuevo cargo en tu organización con la misma estructura y asignación de permisos.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Alcance y Permisos del Cargo</h4>
+              <div className="text-xs text-slate-705 space-y-1 mb-3">
+                <div><span className="font-semibold">Alcance:</span> <span className="rounded-md bg-blue-50 text-blue-600 px-1.5 py-0.5 font-bold uppercase">{scopes.find(s => s.id === copyModalRole.scope)?.value ?? copyModalRole.scope}</span></div>
+                {copyModalRole.description && (
+                  <div><span className="font-semibold">Descripción:</span> {copyModalRole.description}</div>
+                )}
               </div>
 
-              <div className="mt-4">
-                <p className="text-sm text-slate-650">
-                  ¿Deseas copiar el cargo <strong className="text-slate-800">{copyModalRole.name}</strong> a tu empresa?
-                </p>
-                <p className="mt-1.5 text-xs text-slate-500">
-                  Se creará un nuevo cargo en tu organización con la misma estructura y asignación de permisos.
-                </p>
-
-                <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5">Alcance y Permisos del Cargo</h4>
-                  <div className="text-xs text-slate-705 space-y-1 mb-3">
-                    <div><span className="font-semibold">Alcance (Scope):</span> <span className="rounded-md bg-blue-50 text-blue-600 px-1.5 py-0.5 font-bold uppercase">{scopes.find(s => s.id === copyModalRole.scope)?.value ?? copyModalRole.scope}</span></div>
-                    {copyModalRole.description && (
-                      <div><span className="font-semibold">Descripción:</span> {copyModalRole.description}</div>
-                    )}
-                  </div>
-
-                  <pre className="max-h-[220px] overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed select-all">
-                    {generateAsciiPermissions(copyModalRole.permissions)}
-                  </pre>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setCopyModalRole(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-                  disabled={saving}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmCopy}
-                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-sm font-semibold transition shadow-sm disabled:opacity-50"
-                  disabled={saving}
-                >
-                  {saving ? "Copiando..." : "Confirmar Copia"}
-                </button>
-              </div>
+              <pre className="max-h-[220px] overflow-y-auto border border-slate-200 rounded-lg p-3 bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed select-all">
+                {generateAsciiPermissions(copyModalRole.permissions)}
+              </pre>
             </div>
           </div>
-        </div>
+
+          <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-3">
+            <button
+              type="button"
+              onClick={() => setCopyModalRole(null)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmCopy}
+              className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 text-sm font-semibold transition shadow-sm disabled:opacity-50"
+              disabled={saving}
+            >
+              {saving ? "Copiando..." : "Confirmar Copia"}
+            </button>
+          </div>
+        </Dialog>
       ) : null}
 
       {loading ? (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-900/60 backdrop-blur-md transition-opacity duration-300">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100/80 flex flex-col items-center text-center">
-            <div className="relative mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm animate-pulse">
+        <Dialog title={dialogs("loadingData")} onClose={() => {}} dismissible={false} className="max-w-md">
+          <div className="flex flex-col items-center text-center" aria-live="polite">
+            <div aria-hidden="true" className="relative mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50 text-blue-600 shadow-sm animate-pulse">
               <svg className="h-7 w-7 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
             </div>
             
-            <h3 className="text-base font-bold text-slate-800">Cargando datos del sistema</h3>
             <p className="mt-1 text-xs text-slate-500 font-medium">Por favor, espera un momento. Esto puede tardar...</p>
             
             <p className="mt-4 text-xs font-semibold text-blue-650 tracking-wide animate-pulse">{loadingMessage}</p>
@@ -1142,56 +1127,14 @@ export function PositionsConfigClient({actorId, actorRole, companyId}: Props) {
             
             <span className="mt-2 text-2xs font-bold text-slate-400">{progress}% completado</span>
           </div>
-        </div>
+        </Dialog>
       ) : null}
 
-      {/* Toasts Container */}
-      <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 max-w-md w-full pointer-events-none items-center px-4">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border transition-all duration-300 pointer-events-auto transform translate-y-0 ${
-              toast.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : toast.type === "warning"
-                ? "bg-amber-50 border-amber-200 text-amber-800"
-                : toast.type === "info"
-                ? "bg-blue-50 border-blue-200 text-blue-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
-            }`}
-          >
-            {toast.type === "success" && (
-              <svg className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )}
-            {toast.type === "warning" && (
-              <svg className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            )}
-            {toast.type === "info" && (
-              <svg className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )}
-            {toast.type === "error" && (
-              <svg className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            )}
-            <div className="flex-1 text-sm font-medium">{toast.message}</div>
-            <button
-              onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-              className="text-slate-400 hover:text-slate-600 transition shrink-0"
-            >
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        ))}
-      </div>
+      {!isFormOpen && !copyModalRole ? (
+        <div className="fixed top-5 left-1/2 z-[999] flex w-full max-w-md -translate-x-1/2 flex-col items-center gap-2 px-4 pointer-events-none" aria-live="polite">
+          {toastItems}
+        </div>
+      ) : null}
     </section>
   );
 }

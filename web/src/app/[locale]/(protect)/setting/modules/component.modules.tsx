@@ -4,6 +4,8 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import Image from "next/image";
 import {useTranslations} from "next-intl";
 import {useRouter} from "next/navigation";
+import {ConfirmDialog} from "@/components/ui/confirm-dialog";
+import {Dialog} from "@/components/ui/dialog";
 import {getSecureItem} from "@/lib/secure-store";
 
 type ModuleAction = {
@@ -83,6 +85,7 @@ const defaultForm = {
 
 export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
   const t = useTranslations("AccountConfig");
+  const dialogs = useTranslations("dialogs");
   const permissions = useMemo(() => {
     if (actorRole === "SU") {
       return { read: true, create: true, update: true, delete: true };
@@ -126,7 +129,6 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_VISIBLE_COLUMNS));
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formDrawerVisible, setFormDrawerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,19 +164,20 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
     }
   }, [success, showToast]);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
-  const [formErrors, setFormErrors] = useState<Partial<Record<keyof typeof defaultForm, string>>>({});
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof typeof defaultForm | "submit", string>>>({});
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
     onConfirm: () => void | Promise<void>;
-    confirmLabel?: string;
+    confirmLabel: string;
     confirmVariant?: "danger" | "warning";
   }>({
     isOpen: false,
     title: "",
     message: "",
+    confirmLabel: "",
     onConfirm: () => {}
   });
 
@@ -182,17 +185,14 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
     title: string,
     message: string,
     onConfirm: () => void | Promise<void>,
-    confirmLabel = "Confirmar",
+    confirmLabel: string,
     confirmVariant: "danger" | "warning" = "danger"
   ) => {
     setConfirmModal({
       isOpen: true,
       title,
       message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({...prev, isOpen: false}));
-      },
+      onConfirm,
       confirmLabel,
       confirmVariant
     });
@@ -411,7 +411,6 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
   function openCreateForm() {
     clearFormState();
     setIsFormOpen(true);
-    window.setTimeout(() => setFormDrawerVisible(true), 10);
   }
 
   function openCreateFormWithPreset(presetParent: string, presetDestination: string, presetContent: string = "newPage") {
@@ -423,12 +422,10 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
       content: presetContent
     }));
     setIsFormOpen(true);
-    window.setTimeout(() => setFormDrawerVisible(true), 10);
   }
 
   function onEdit(item: ModuleItem) {
     setIsFormOpen(true);
-    window.setTimeout(() => setFormDrawerVisible(true), 10);
     setEditingId(item.id);
     setForm({
       code: item.code,
@@ -448,8 +445,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
   }
 
   function closeFormDrawer() {
-    setFormDrawerVisible(false);
-    window.setTimeout(() => setIsFormOpen(false), 220);
+    setIsFormOpen(false);
   }
 
   async function onIconFile(file: File | null) {
@@ -472,13 +468,14 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
       errors.sort_order = t("errors.numericOrder");
     }
     if (!form.status.trim()) errors.status = t("errors.requiredStatus");
-    if (!form.parent.trim()) errors.parent = "parent es obligatorio. Usa '/' para raiz";
+    if (!form.parent.trim()) errors.parent = "Selecciona una sección padre o el nivel principal.";
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
     setSaving(true);
+    setFormErrors({});
     try {
       const payload = {
         ...form,
@@ -505,16 +502,16 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
       await loadData();
       router.refresh();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : t("errors.save"));
+      setFormErrors({submit: submitError instanceof Error ? submitError.message : t("errors.save")});
     } finally {
       setSaving(false);
     }
   }
 
   async function onChangeStatus(item: ModuleItem, nextStatus: "active" | "inactive") {
-    const title = nextStatus === "inactive" ? t("actions.deactivate") : t("actions.reactivate");
+    const title = nextStatus === "inactive" ? dialogs("deactivateModule") : t("actions.reactivate");
     const message = nextStatus === "inactive"
-      ? t("confirm.deactivate", {name: item.name})
+      ? dialogs("deactivateModuleDescription", {name: item.name})
       : t("confirm.reactivate", {name: item.name});
 
     showConfirm(
@@ -539,9 +536,24 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
           setSaving(false);
         }
       },
-      nextStatus === "inactive" ? "Desactivar" : "Reactivar",
+      title,
       nextStatus === "inactive" ? "danger" : "warning"
     );
+  }
+
+  function onFormStatusChange(status: string) {
+    const current = modules.find((item) => item.id === editingId);
+    const updateStatus = () => setForm((state) => ({...state, status}));
+    if (current && current.status !== "inactive" && status === "inactive") {
+      showConfirm(
+        dialogs("deactivateModule"),
+        dialogs("deactivateModuleOnSaveDescription", {name: current.name}),
+        updateStatus,
+        dialogs("deactivateModule")
+      );
+      return;
+    }
+    updateStatus();
   }
 
   function setSort(column: keyof ModuleItem) {
@@ -572,7 +584,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
       return;
     }
     if (!newActionScope.trim()) {
-      setActionError("El scope/alcance de la acción es obligatorio.");
+      setActionError("Elige un alcance para la acción.");
       return;
     }
     // Generar un ID único corto tipo uuid/cuid (ej: act_x7f2a9)
@@ -583,15 +595,18 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
     setNewActionScope(scopes[0]?.id ?? "");
   };
 
-  const handleDeleteAction = (aid: string) => {
-    setModuleActions((prev) =>
-      prev.map((act) => (act.id === aid ? { ...act, status: "inactive" } : act))
-    );
-  };
-
   const handleUpdateActionStatus = (aid: string, newStatus: "active" | "inactive" | "deprecated") => {
     setModuleActions((prev) =>
       prev.map((act) => (act.id === aid ? { ...act, status: newStatus } : act))
+    );
+  };
+
+  const handleDeactivateAction = (action: ModuleAction) => {
+    showConfirm(
+      dialogs("deactivateAction"),
+      dialogs("deactivateActionDescription", {name: action.label}),
+      () => handleUpdateActionStatus(action.id, "inactive"),
+      dialogs("deactivateAction")
     );
   };
 
@@ -688,7 +703,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                 <button
                   type="button"
                   className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 transition"
-                  title="Agregar submódulo"
+                  aria-label={dialogs("addSubmodule")}
                   onClick={() => {
                     openCreateFormWithPreset(module.id, module.destination || "");
                   }}
@@ -734,7 +749,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
               <button
                 type="button"
                 className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 transition"
-                title="Agregar submódulo"
+                aria-label={dialogs("addSubmodule")}
                 onClick={() => {
                   openCreateFormWithPreset(module.id, module.destination || "");
                 }}
@@ -775,7 +790,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
           <button
             type="button"
             className="relative flex h-6 w-6 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 transition"
-            title="Gestionar Acciones"
+            aria-label={dialogs("manageActions")}
             onClick={() => handleOpenActionsModal(module)}
           >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="h-3 w-3">
@@ -798,9 +813,13 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
     );
   };
 
+  const getStatusLabel = (status: ModuleItem["status"]) =>
+    statuses.find((item) => item.value.toLowerCase() === status)?.label ??
+    (status === "active" ? "Activo" : "Inactivo");
+
   const renderMetaRow = (module: ModuleItem) => {
     const contentLabel = pageContents.find(p => p.value === module.content)?.label ?? module.content ?? "-";
-    const statusLabel = module.status === "active" ? "Activo" : "Inactivo";
+    const statusLabel = getStatusLabel(module.status);
     
     return (
       <div 
@@ -839,7 +858,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
   const renderMetaHeader = () => (
     <div className="grid min-h-10 grid-cols-5 items-center rounded-full bg-slate-100 text-center text-xs font-bold text-slate-500 px-4 py-2 shrink-0 border border-slate-200 select-none">
       <span>TIPO</span>
-      <span>PADRE (ID)</span>
+      <span>SECCIÓN PADRE</span>
       <span>RUTA</span>
       <span>ORDEN</span>
       <span>ESTADO</span>
@@ -880,7 +899,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                 <button
                   type="button"
                   className="flex h-4.5 w-4.5 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white hover:bg-blue-700 transition"
-                  title="Agregar submódulo"
+                  aria-label={dialogs("addSubmodule")}
                   onClick={(e) => {
                     e.stopPropagation();
                     openCreateFormWithPreset(module.id, module.destination || "");
@@ -919,7 +938,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                         <button
                           type="button"
                           className="relative flex h-5 w-5 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 transition"
-                          title="Gestionar Acciones"
+                          aria-label={dialogs("manageActions")}
                           onClick={() => handleOpenActionsModal(child)}
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor" className="h-3 w-3">
@@ -1145,7 +1164,7 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                         );
                       }
                       if (column.key === "sort_order") return <td key={`${item.id}-order`} className="px-4 py-3">{item.sort_order}</td>;
-                      if (column.key === "status") return <td key={`${item.id}-status`} className="px-4 py-3">{item.status}</td>;
+                      if (column.key === "status") return <td key={`${item.id}-status`} className="px-4 py-3">{getStatusLabel(item.status)}</td>;
                       if (column.key === "parent") return <td key={`${item.id}-parent`} className="px-4 py-3 font-mono text-xs">{item.parent ?? "-"}</td>;
                       if (column.key === "scope_id") {
                         const scopeValue = scopes.find(s => s.id === item.scope_id)?.value ?? item.scope_id;
@@ -1162,16 +1181,17 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                       }
                       return (
                         <td key={`${item.id}-actions`} className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex flex-wrap items-center justify-center gap-1.5">
                             {/* Gestionar Acciones (Escudo/Llave Morado) */}
                             {item.content === "newPage" ? (
-                              <div className="group relative">
+                              <div className="relative">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenActionsModal(item)}
-                                  className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 shadow-sm hover:bg-purple-100 hover:border-purple-300 hover:text-purple-700 transition duration-150"
+                                  aria-label={dialogs("manageActions")}
+                                  className="relative inline-flex min-h-8 items-center justify-center gap-1.5 px-2 text-xs font-semibold whitespace-nowrap rounded-lg border border-purple-200 bg-purple-50 text-purple-600 shadow-sm hover:bg-purple-100 hover:border-purple-300 hover:text-purple-700 transition duration-150"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286Zm0 13.036h.008v.008H12v-.008Z" />
                                   </svg>
                                   {(() => {
@@ -1184,10 +1204,8 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
                                       </span>
                                     );
                                   })()}
+                                    <span className="hidden sm:inline">{dialogs("manageActions")}</span>
                                 </button>
-                                <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                  Acciones
-                                </span>
                               </div>
                             ) : (
                               <div className="w-8 h-8" />
@@ -1195,50 +1213,50 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
 
                             {/* Editar (Lápiz Azul) */}
                             {permissions.update && (
-                              <div className="group relative">
+                              <div className="relative">
                                 <button
                                   type="button"
                                   onClick={() => onEdit(item)}
-                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
+                                  aria-label={t("actions.edit")}
+                                  className="inline-flex min-h-8 items-center justify-center gap-1.5 px-2 text-xs font-semibold whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
+                                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
                                     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                                     <path d="m15 5 4 4" />
                                   </svg>
+                                    <span className="hidden sm:inline">{t("actions.edit")}</span>
                                 </button>
-                                <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                  {t("actions.edit")}
-                                </span>
                               </div>
                             )}
 
                             {/* Desactivar / Reactivar (Basura / Check) */}
                             {permissions.delete && (
-                              <div className="group relative">
+                              <div className="relative">
                                 {item.status === "active" ? (
                                   <button
                                     type="button"
                                     onClick={() => void onChangeStatus(item, "inactive")}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
+                                    aria-label={t("actions.deactivate")}
+                                    className="inline-flex min-h-8 items-center justify-center gap-1.5 px-2 text-xs font-semibold whitespace-nowrap rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                                     </svg>
+                                      <span className="hidden sm:inline">{t("actions.deactivate")}</span>
                                   </button>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => void onChangeStatus(item, "active")}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm hover:bg-emerald-100 hover:border-emerald-300 hover:text-emerald-700 transition duration-150"
+                                    aria-label={t("actions.reactivate")}
+                                    className="inline-flex min-h-8 items-center justify-center gap-1.5 px-2 text-xs font-semibold whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 shadow-sm hover:bg-emerald-100 hover:border-emerald-300 hover:text-emerald-700 transition duration-150"
                                   >
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                                     </svg>
+                                      <span className="hidden sm:inline">{t("actions.reactivate")}</span>
                                   </button>
                                 )}
-                                <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                  {item.status === "active" ? t("actions.deactivate") : t("actions.reactivate")}
-                                </span>
                               </div>
                             )}
                           </div>
@@ -1347,331 +1365,303 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
       </article>
 
       {isFormOpen ? (
-        <div className="fixed inset-0 z-50">
-          <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${formDrawerVisible ? "opacity-100" : "opacity-0"}`} onClick={closeFormDrawer} />
-          <aside className={`absolute right-0 top-0 h-full w-full max-w-[720px] overflow-y-auto bg-white p-5 shadow-2xl transition-transform duration-200 ease-out ${formDrawerVisible ? "translate-x-0" : "translate-x-full"}`}>
-            <div className="mb-2 flex items-start justify-between">
+        <Dialog
+          title={editingId ? t("form.edit") : t("form.create")}
+          placement="side"
+          className="max-w-[720px]"
+          onClose={closeFormDrawer}
+          dismissible={!saving}
+        >
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
               <div>
-                <h3 className="text-3xl font-semibold">{editingId ? t("form.edit") : t("form.create")}</h3>
-                <p className="text-sm text-slate-500">Configura el modulo con la misma experiencia visual del panel lateral.</p>
+                <label htmlFor="module-code" className="mb-1 block text-xs text-slate-500">{t("form.code")}</label>
+                <input id="module-code"
+                  value={form.code}
+                  disabled
+                  placeholder={editingId ? t("form.immutableCode") : t("form.autoCode")}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500"
+                />
               </div>
-              <button type="button" onClick={closeFormDrawer} className="text-2xl text-slate-400 hover:text-slate-700">×</button>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.code")}</label>
-                  <input
-                    value={form.code}
-                    disabled
-                    placeholder={editingId ? t("form.immutableCode") : t("form.autoCode")}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.name")}</label>
-                  <input value={form.name} onChange={(e) => setForm((s) => ({...s, name: e.target.value}))} placeholder={t("form.name")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
-                  {formErrors.name ? <p className="mt-1 text-xs text-rose-600">{formErrors.name}</p> : null}
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.route")}</label>
-                  <input value={form.route} onChange={(e) => setForm((s) => ({...s, route: e.target.value}))} placeholder={t("form.route")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.pageContent")}</label>
-                  <select
-                    value={form.content}
-                    onChange={(e) => setForm((s) => ({...s, content: e.target.value}))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
-                  >
-                    {pageContents.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.order")}</label>
-                  <input value={form.sort_order} onChange={(e) => setForm((s) => ({...s, sort_order: e.target.value}))} placeholder={t("form.order")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
-                  {formErrors.sort_order ? <p className="mt-1 text-xs text-rose-600">{formErrors.sort_order}</p> : null}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">{t("form.status")}</label>
-                    <select value={form.status} onChange={(e) => setForm((s) => ({...s, status: e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
-                      {statuses.map((status) => (
-                        <option key={status.value} value={status.value}>{status.label}</option>
-                      ))}
-                    </select>
-                    {formErrors.status ? <p className="mt-1 text-xs text-rose-600">{formErrors.status}</p> : null}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">Destination</label>
-                    <select value={form.destination} onChange={(e) => setForm((s) => ({...s, destination: e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
-                      <option value="">Ninguno</option>
-                      {destinations.map((dest) => (
-                        <option key={dest.value} value={dest.value}>{dest.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.scope")}</label>
-                  <select value={form.scope_id} onChange={(e) => setForm((s) => ({...s, scope_id: e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
-                    {scopes.map((scope) => (
-                      <option key={scope.id} value={scope.id}>{scope.value ?? scope.name ?? scope.id}</option>
-                    ))}
-                  </select>
-                  {formErrors.scope_id ? <p className="mt-1 text-xs text-rose-600">{formErrors.scope_id}</p> : null}
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.parent")}</label>
-                  <select
-                    value={form.parent}
-                    onChange={(e) => setForm((s) => ({...s, parent: e.target.value}))}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
-                  >
-                    <option value="/">{t("form.root")}</option>
-                    {modules
-                      .filter((moduleItem) => {
-                        if (!moduleItem.route || moduleItem.route.trim().length === 0) return false;
-                        if (!editingId) return true;
-                        return moduleItem.id !== editingId;
-                      })
-                      .map((moduleItem) => (
-                        <option key={moduleItem.id} value={moduleItem.id}>
-                          {moduleItem.route}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                {formErrors.parent ? <p className="mt-1 text-xs text-rose-600">{formErrors.parent}</p> : null}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm md:row-span-2">
-                  <label className="mb-2 block text-xs text-slate-500">{t("form.icon")}</label>
-                  <input type="file" accept="image/*" onChange={(e) => void onIconFile(e.target.files?.[0] ?? null)} className="text-xs" />
-                  {iconPreview ? (
-                    <div className="mt-2 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-400 p-1.5">
-                      <Image src={iconPreview} alt="Preview" width={36} height={36} className="h-full w-full object-contain" unoptimized />
-                    </div>
-                  ) : null}
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-xs text-slate-500">{t("form.descriptionField")}</label>
-                  <input value={form.description} onChange={(e) => setForm((s) => ({...s, description: e.target.value}))} placeholder={t("form.descriptionField")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
-                </div>
+              <div>
+                <label htmlFor="module-name" className="mb-1 block text-xs text-slate-500">{t("form.name")}</label>
+                <input id="module-name" value={form.name} onChange={(e) => setForm((s) => ({...s, name: e.target.value}))} placeholder={t("form.name")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
+                {formErrors.name ? <p className="mt-1 text-xs text-rose-600">{formErrors.name}</p> : null}
               </div>
-            <div className="mt-5 flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    clearFormState();
-                    closeFormDrawer();
-                  }}
-                  className="rounded-xl px-4 py-2 text-sm text-rose-600"
+              <div>
+                <label htmlFor="module-route" className="mb-1 block text-xs text-slate-500">{t("form.route")}</label>
+                <input id="module-route" value={form.route} onChange={(e) => setForm((s) => ({...s, route: e.target.value}))} placeholder={t("form.route")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label htmlFor="module-content" className="mb-1 block text-xs text-slate-500">{t("form.pageContent")}</label>
+                <select id="module-content"
+                  value={form.content}
+                  onChange={(e) => setForm((s) => ({...s, content: e.target.value}))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
                 >
-                  {t("form.cancel")}
-                </button>
-                <button disabled={saving} onClick={() => void onSubmit()} className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? t("form.saving") : editingId ? t("form.saveChanges") : t("form.createModule")}</button>
+                  {pageContents.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
               </div>
-          </aside>
-        </div>
-      ) : null}
-
-      {actionsModalOpen && selectedModule ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setActionsModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100 flex flex-col max-h-[85vh]">
-            
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <span className="rounded-lg bg-purple-50 p-1 text-purple-600 text-sm">🛡️</span>
-                  Gestionar Acciones: {selectedModule.name}
-                </h3>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedModule.route || '/'}</p>
+                <label htmlFor="module-order" className="mb-1 block text-xs text-slate-500">{t("form.order")}</label>
+                <input id="module-order" value={form.sort_order} onChange={(e) => setForm((s) => ({...s, sort_order: e.target.value}))} placeholder={t("form.order")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
+                {formErrors.sort_order ? <p className="mt-1 text-xs text-rose-600">{formErrors.sort_order}</p> : null}
               </div>
-              <button type="button" onClick={() => setActionsModalOpen(false)} className="text-2xl font-bold text-slate-400 hover:text-slate-600 transition">×</button>
-            </div>
-
-            {actionError ? (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{actionError}</p>
-            ) : null}
-
-            {/* FORMULARIO DE AGREGAR ACCIÓN */}
-            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Agregar nueva acción</h4>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Etiqueta descriptiva</label>
-                  <input
-                    type="text"
-                    value={newActionLabel}
-                    onChange={(e) => setNewActionLabel(e.target.value)}
-                    placeholder="ej: Escanear Postcosecha"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 font-medium"
-                  />
+                  <label htmlFor="module-status" className="mb-1 block text-xs text-slate-500">{t("form.status")}</label>
+                  <select id="module-status" value={form.status} onChange={(e) => onFormStatusChange(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
+                    {statuses.map((status) => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
+                  </select>
+                  {formErrors.status ? <p className="mt-1 text-xs text-rose-600">{formErrors.status}</p> : null}
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Alcance (Scope)</label>
-                  <select
-                    value={newActionScope}
-                    onChange={(e) => setNewActionScope(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 font-medium"
-                  >
-                    <option value="">Selecciona alcance...</option>
-                    {scopes.map((scope) => (
-                      <option key={scope.id} value={scope.id}>
-                        {scope.value ?? scope.name ?? scope.id}
+                  <label htmlFor="module-destination" className="mb-1 block text-xs text-slate-500">{t("table.destination")}</label>
+                  <select id="module-destination" value={form.destination} onChange={(e) => setForm((s) => ({...s, destination: e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
+                    <option value="">Ninguno</option>
+                    {destinations.map((dest) => (
+                      <option key={dest.value} value={dest.value}>{dest.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="module-scope" className="mb-1 block text-xs text-slate-500">{t("form.scope")}</label>
+                <select id="module-scope" value={form.scope_id} onChange={(e) => setForm((s) => ({...s, scope_id: e.target.value}))} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm">
+                  {scopes.map((scope) => (
+                    <option key={scope.id} value={scope.id}>{scope.value ?? scope.name ?? scope.id}</option>
+                  ))}
+                </select>
+                {formErrors.scope_id ? <p className="mt-1 text-xs text-rose-600">{formErrors.scope_id}</p> : null}
+              </div>
+              <div>
+                <label htmlFor="module-parent" className="mb-1 block text-xs text-slate-500">{t("form.parent")}</label>
+                <select id="module-parent"
+                  value={form.parent}
+                  onChange={(e) => setForm((s) => ({...s, parent: e.target.value}))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm"
+                >
+                  <option value="/">{t("form.root")}</option>
+                  {modules
+                    .filter((moduleItem) => {
+                      if (!moduleItem.route || moduleItem.route.trim().length === 0) return false;
+                      if (!editingId) return true;
+                      return moduleItem.id !== editingId;
+                    })
+                    .map((moduleItem) => (
+                      <option key={moduleItem.id} value={moduleItem.id}>
+                        {moduleItem.route}
                       </option>
                     ))}
-                  </select>
-                </div>
+                </select>
               </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleAddAction}
-                  className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition"
-                >
-                  Añadir
-                </button>
-              </div>
-            </div>
-
-            {/* LISTADO DE ACCIONES EXISTENTES */}
-            <div className="mt-4 flex-1 overflow-y-auto min-h-[160px] max-h-[300px] border border-slate-100 rounded-xl bg-white p-1">
-              <div className="divide-y divide-slate-50">
-                {moduleActions.map((act) => {
-                  const status = act.status || "active";
-                  return (
-                    <div key={act.id} className={`flex items-center justify-between p-2.5 rounded-lg transition duration-150 ${status === "inactive" ? "bg-slate-50 opacity-60" : status === "deprecated" ? "bg-amber-50/40 opacity-80" : "hover:bg-slate-50/50"}`}>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`text-xs font-semibold ${status === "inactive" ? "text-slate-400 line-through" : "text-slate-700"}`}>
-                            {act.label}
-                          </p>
-                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                            status === "active" 
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
-                              : status === "deprecated" 
-                                ? "bg-amber-50 text-amber-700 border border-amber-100" 
-                                : "bg-slate-100 text-slate-500 border border-slate-200"
-                          }`}>
-                            {status === "active" ? "Activo" : status === "deprecated" ? "Deprecado" : "Inactivo"}
-                          </span>
-                          {act.scope && (
-                            <span className="rounded bg-sky-50 text-sky-700 border border-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase">
-                              {scopes.find(s => s.id === act.scope)?.value ?? act.scope}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">id: {act.id}</p>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {/* Botón de Activar (si está inactivo o deprecado) */}
-                        {status !== "active" && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateActionStatus(act.id, "active")}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 transition duration-150"
-                            title="Activar acción"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-3.5 h-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                            </svg>
-                          </button>
-                        )}
-
-                        {/* Botón de alternar Deprecado (si está activo o inactivo) */}
-                        {status !== "deprecated" && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateActionStatus(act.id, "deprecated")}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:border-amber-300 transition duration-150"
-                            title="Marcar como Deprecado"
-                          >
-                            ⚠️
-                          </button>
-                        )}
-
-                        {/* Botón de Desactivar (si está activo o deprecado) */}
-                        {status !== "inactive" && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateActionStatus(act.id, "inactive")}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition duration-150"
-                            title="Desactivar acción"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-3.5 h-3.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {moduleActions.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic text-center py-8">No hay acciones de negocio definidas para este módulo.</p>
+              {formErrors.parent ? <p className="mt-1 text-xs text-rose-600">{formErrors.parent}</p> : null}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm md:row-span-2">
+                <label htmlFor="module-icon" className="mb-2 block text-xs text-slate-500">{t("form.icon")}</label>
+                <input id="module-icon" type="file" accept="image/*" onChange={(e) => void onIconFile(e.target.files?.[0] ?? null)} className="text-xs" />
+                {iconPreview ? (
+                  <div className="mt-2 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-400 p-1.5">
+                    <Image src={iconPreview} alt="" width={36} height={36} className="h-full w-full object-contain" unoptimized />
+                  </div>
                 ) : null}
               </div>
+              <div className="md:col-span-2">
+                <label htmlFor="module-description" className="mb-1 block text-xs text-slate-500">{t("form.descriptionField")}</label>
+                <input id="module-description" value={form.description} onChange={(e) => setForm((s) => ({...s, description: e.target.value}))} placeholder={t("form.descriptionField")} className="w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm" />
+              </div>
             </div>
-
-            {/* BOTONES DE PIE */}
-            <div className="mt-5 flex justify-end gap-3 border-t border-slate-100 pt-3 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setActionsModalOpen(false)}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
+          {formErrors.submit ? (
+            <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{formErrors.submit}</p>
+          ) : null}
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
                 disabled={saving}
-                onClick={handleSaveActions}
-                className="rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-5 py-2.5 text-xs font-semibold transition shadow-sm"
+                onClick={() => {
+                  clearFormState();
+                  closeFormDrawer();
+                }}
+                className="rounded-xl px-4 py-2 text-sm text-rose-600"
               >
-                {saving ? "Guardando..." : "Guardar Cambios"}
+                {t("form.cancel")}
+              </button>
+              <button disabled={saving} onClick={() => void onSubmit()} className="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">{saving ? t("form.saving") : editingId ? t("form.saveChanges") : t("form.createModule")}</button>
+            </div>
+        </Dialog>
+      ) : null}
+
+      {actionsModalOpen && selectedModule ? (
+        <Dialog
+          title={`${dialogs("manageActions")} · ${selectedModule.name}`}
+          className="max-w-lg"
+          onClose={() => setActionsModalOpen(false)}
+          dismissible={!saving}
+        >
+          <p className="break-all text-xs text-slate-500 font-mono">{selectedModule.route || "/"}</p>
+
+          {actionError ? (
+            <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">{actionError}</p>
+          ) : null}
+
+          {/* FORMULARIO DE AGREGAR ACCIÓN */}
+          <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/50 p-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Agregar nueva acción</h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="module-action-label" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Etiqueta descriptiva</label>
+                <input id="module-action-label"
+                  type="text"
+                  value={newActionLabel}
+                  onChange={(e) => setNewActionLabel(e.target.value)}
+                  placeholder="ej: Escanear Postcosecha"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 font-medium"
+                />
+              </div>
+              <div>
+                <label htmlFor="module-action-scope" className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Alcance</label>
+                <select id="module-action-scope"
+                  value={newActionScope}
+                  onChange={(e) => setNewActionScope(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 font-medium"
+                >
+                  <option value="">Selecciona un alcance</option>
+                  {scopes.map((scope) => (
+                    <option key={scope.id} value={scope.id}>
+                      {scope.value ?? scope.name ?? scope.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={handleAddAction}
+                className="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition"
+              >
+                Añadir
               </button>
             </div>
-
           </div>
-        </div>
+
+          {/* LISTADO DE ACCIONES EXISTENTES */}
+          <div className="mt-4 flex-1 overflow-y-auto min-h-[160px] max-h-[300px] border border-slate-100 rounded-xl bg-white p-1">
+            <div className="divide-y divide-slate-50">
+              {moduleActions.map((act) => {
+                const status = act.status || "active";
+                return (
+                  <div key={act.id} className={`flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg transition duration-150 ${status === "inactive" ? "bg-slate-50 opacity-60" : status === "deprecated" ? "bg-amber-50/40 opacity-80" : "hover:bg-slate-50/50"}`}>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`text-xs font-semibold ${status === "inactive" ? "text-slate-400 line-through" : "text-slate-700"}`}>
+                          {act.label}
+                        </p>
+                        <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                          status === "active"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                            : status === "deprecated"
+                              ? "bg-amber-50 text-amber-700 border border-amber-100"
+                              : "bg-slate-100 text-slate-500 border border-slate-200"
+                        }`}>
+                          {status === "active" ? "Activo" : status === "deprecated" ? "En desuso" : "Inactivo"}
+                        </span>
+                        {act.scope && (
+                          <span className="rounded bg-sky-50 text-sky-700 border border-sky-100 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+                            {scopes.find(s => s.id === act.scope)?.value ?? act.scope}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">Código: {act.id}</p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Botón de Activar (si está inactivo o deprecado) */}
+                      {status !== "active" && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateActionStatus(act.id, "active")}
+                          className="inline-flex min-h-7 items-center justify-center gap-1.5 px-2 text-xs font-semibold rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 transition duration-150"
+                          aria-label={dialogs("activate")}
+                        >
+                          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                          </svg>
+                          <span className="hidden sm:inline">{dialogs("activate")}</span>
+                        </button>
+                      )}
+
+                      {/* Botón de alternar Deprecado (si está activo o inactivo) */}
+                      {status !== "deprecated" && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateActionStatus(act.id, "deprecated")}
+                          className="inline-flex min-h-7 items-center justify-center gap-1.5 px-2 text-xs font-semibold rounded-lg border border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 hover:border-amber-300 transition duration-150"
+                          aria-label={dialogs("retireAction")}
+                        >
+                          <span aria-hidden="true">⚠️</span>
+                          <span className="hidden sm:inline">{dialogs("retireAction")}</span>
+                        </button>
+                      )}
+
+                      {/* Botón de Desactivar (si está activo o deprecado) */}
+                      {status !== "inactive" && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeactivateAction(act)}
+                          className="inline-flex min-h-7 items-center justify-center gap-1.5 px-2 text-xs font-semibold rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition duration-150"
+                          aria-label={dialogs("deactivateAction")}
+                        >
+                          <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="w-3.5 h-3.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                          </svg>
+                          <span className="hidden sm:inline">{dialogs("deactivateAction")}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {moduleActions.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-8">No hay acciones de negocio definidas para este módulo.</p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* BOTONES DE PIE */}
+          <div className="mt-5 flex justify-end gap-3 border-t border-slate-100 pt-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setActionsModalOpen(false)}
+              disabled={saving}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleSaveActions}
+              className="rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white px-5 py-2.5 text-xs font-semibold transition shadow-sm"
+            >
+              {saving ? "Guardando..." : "Guardar Cambios"}
+            </button>
+          </div>
+
+        </Dialog>
       ) : null}
 
       {confirmModal.isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))} />
-          <div className="relative z-10 w-full max-w-md transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col items-center text-center">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-full ${confirmModal.confirmVariant === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"} mb-4`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">{confirmModal.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({...prev, isOpen: false}))}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmModal.onConfirm();
-                }}
-                className={`rounded-xl ${confirmModal.confirmVariant === "danger" ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-amber-500 hover:bg-amber-600 text-slate-900"} px-5 py-2.5 text-sm font-semibold transition shadow-sm`}
-              >
-                {confirmModal.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          title={confirmModal.title}
+          description={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          variant={confirmModal.confirmVariant}
+          onClose={() => setConfirmModal((prev) => ({...prev, isOpen: false}))}
+          onConfirm={confirmModal.onConfirm}
+        />
       ) : null}
 
       {/* Toasts Container */}

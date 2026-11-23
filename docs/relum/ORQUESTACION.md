@@ -48,8 +48,17 @@ Desde el 2026-11-22 el trabajo se reparte así:
 | # | Tarea | Agente | Estado | Commit |
 |---|---|---|---|---|
 | 001 | Healthcheck de la app (`/api/health`) | Codex | terminada, verificada y en producción | 6ae7112 |
+| 002 | Menú móvil | Codex + ajuste del orquestador | terminada y verificada (foco al abrir sin ver en vivo) | pendiente |
+| 003 | Registro en pasos con etiquetas | Codex | terminada; falta prueba con sesión real | pendiente |
+| 004 | Diálogos accesibles, confirmaciones y acciones con texto | Codex | terminada y verificada | pendiente |
 
 ## Lecciones aprendidas
 
 - El sandbox de Codex (`workspace-write`) no tiene red: no puede descargar Google Fonts ni instalar
   paquetes. El orquestador corre el `next build` completo y cualquier `npm install`.
+- Tres agentes Codex pueden editar `messages/*.json` a la vez si cada uno usa su propia clave y hace
+  cambios puntuales (tareas 002–004 sin conflictos).
+- Para probar pantallas protegidas en local: `DEV_FAKE_SESSION=true` en `web/.env.local`. No sirve para
+  `/onboarding`, que exige sesión real.
+- Si el panel del navegador de pruebas está oculto, el navegador pausa transiciones y animaciones:
+  el foco o los efectos animados pueden parecer rotos sin estarlo.

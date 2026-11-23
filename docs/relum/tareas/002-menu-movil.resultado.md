@@ -1,0 +1,5 @@
+Implementé el menú móvil en [protected-sidebar-layout.tsx](/Users/gersonpop/Documents/Proyectos/Proyecto%20Gestion%20OT/web/src/components/protected-sidebar-layout.tsx). Por debajo de 768 px, la barra fija muestra «Relum» y «Menú». El panel se cierra con el botón, Escape, un clic en el fondo o al navegar. Mientras está abierto, bloquea el desplazamiento del contenido y mantiene el foco dentro. También ajusté el modal de perfil para que tenga desplazamiento vertical interno en pantallas pequeñas.
+
+Agregué la clave `mobileMenu` en español, inglés y francés. TypeScript pasó, los tres JSON son válidos y ESLint conservó los mismos 15 errores y 12 advertencias previos.
+
+Quedó pendiente la prueba visual a 375 px porque el navegador no arrancó en el sandbox. El build queda a cargo del orquestador, según la tarea. Sin commit.

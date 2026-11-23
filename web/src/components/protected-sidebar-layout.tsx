@@ -1,9 +1,10 @@
 "use client";
 
 import { signOut, getSession } from "next-auth/react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { selectSidebarModulesFromDbRows, type DynamicModuleNav } from "@/lib/sidebar-access";
 import { getSecureItem, setSecureItem } from "@/lib/secure-store";
 
@@ -56,6 +57,47 @@ export function ProtectedSidebarLayout({
   children
 }: ProtectedSidebarLayoutProps) {
   const pathname = usePathname();
+  const mobileMenuText = useTranslations("mobileMenu");
+  const sidebarId = useId();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const [mobileMenuPath, setMobileMenuPath] = useState<string | null>(null);
+  const mobileMenuOpen = mobileMenuPath !== null && mobileMenuPath === pathname;
+  if (mobileMenuPath !== null && !mobileMenuOpen) setMobileMenuPath(null);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+
+    const menuButton = menuButtonRef.current;
+    const desktop = window.matchMedia("(min-width: 48rem)");
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setMobileMenuPath(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setMobileMenuPath(null);
+    };
+    const originalOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    // El panel pasa de invisible a visible con una transición: se enfoca en el siguiente cuadro,
+    // cuando ya es visible (un elemento invisible no puede recibir el foco).
+    let focusFrame = requestAnimationFrame(() => {
+      focusFrame = requestAnimationFrame(() => closeMenuButtonRef.current?.focus({ preventScroll: true }));
+    });
+    desktop.addEventListener("change", closeOnDesktop);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      desktop.removeEventListener("change", closeOnDesktop);
+      document.removeEventListener("keydown", closeOnEscape);
+      document.body.style.overflow = originalOverflow;
+      if (!desktop.matches) menuButton?.focus({ preventScroll: true });
+    };
+  }, [mobileMenuOpen]);
+
   const [mode, setMode] = useState<SidebarMode>(() => {
     if (globalHasHydrated && typeof window !== "undefined") {
       try {
@@ -483,9 +525,9 @@ export function ProtectedSidebarLayout({
     return () => mediaQuery.removeEventListener("change", listener);
   }, []);
 
-  const expanded = !isMounted ? true : (mode === "fixed" || (mode === "auto" && hoverExpanded));
-  const compact = !isMounted ? false : (mode === "compact" || (mode === "auto" && !hoverExpanded));
-  const hidden = false;
+  const desktopExpanded = !isMounted || mode === "fixed" || (mode === "auto" && hoverExpanded);
+  const expanded = mobileMenuOpen || desktopExpanded;
+  const compact = !expanded;
 
   const isNightActive = !isMounted ? false : (automaticTheme && isSystemDark);
   const isSidebarDark = !isMounted ? true : (automaticTheme ? isSystemDark : darkPanel);
@@ -506,10 +548,7 @@ export function ProtectedSidebarLayout({
     }
   }, [isNightActive]);
 
-  const sidebarWidthClass = useMemo(() => {
-    if (expanded) return "w-[256px]";
-    return "w-[72px]";
-  }, [expanded]);
+  const sidebarWidthClass = desktopExpanded ? "md:w-[256px]" : "md:w-[72px]";
 
   const sidebarItems = useMemo(() => {
     // 1. Get all root-level items (parent is "/")
@@ -611,7 +650,7 @@ export function ProtectedSidebarLayout({
 
   useEffect(() => {
     updateScrollHints();
-  }, [expanded, compact, mode]);
+  }, [expanded, compact, mode, mobileMenuOpen]);
 
   const scrollModules = (direction: "up" | "down") => {
     const element = navScrollRef.current;
@@ -639,10 +678,53 @@ export function ProtectedSidebarLayout({
     >
       <div className="absolute inset-0 bg-white/5" />
 
+      <header
+        inert={mobileMenuOpen}
+        className="fixed inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-white/15 bg-slate-950 px-4 text-white md:hidden"
+      >
+        <span className="text-lg font-semibold">Relum</span>
+        <button
+          ref={menuButtonRef}
+          type="button"
+          aria-expanded={mobileMenuOpen}
+          aria-controls={sidebarId}
+          onClick={() => setMobileMenuPath(pathname)}
+          className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-cyan-300"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-5">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          {mobileMenuText("open")}
+        </button>
+      </header>
+
+      {mobileMenuOpen && (
+        <div
+          aria-hidden="true"
+          onClick={() => setMobileMenuPath(null)}
+          className="fixed inset-0 z-30 touch-none bg-slate-950/65 md:hidden"
+        />
+      )}
+
       <aside
+        id={sidebarId}
+        role={mobileMenuOpen ? "dialog" : undefined}
+        aria-modal={mobileMenuOpen ? true : undefined}
+        aria-label={mobileMenuOpen ? mobileMenuText("open") : undefined}
+        onKeyDown={(event) => {
+          if (!mobileMenuOpen || event.key !== "Tab") return;
+          const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("a[href], button, input"))
+            .filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0);
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey ? event.target === first : event.target === last) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+          }
+        }}
         onMouseEnter={() => mode === "auto" && setHoverExpanded(true)}
         onMouseLeave={() => mode === "auto" && setHoverExpanded(false)}
-        className={`relative z-20 h-full shrink-0 overflow-hidden border-r border-white/20 transition-[width,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${sidebarWidthClass} ${hidden ? "-translate-x-full" : "translate-x-0"
+        className={`fixed inset-y-0 left-0 z-40 h-full w-[min(20rem,calc(100%-3rem))] shrink-0 overflow-hidden border-r border-white/20 transition-[width,translate,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:max-md:transition-none md:relative md:z-20 md:duration-500 ${sidebarWidthClass} ${mobileMenuOpen ? "translate-x-0" : "max-md:invisible max-md:-translate-x-full"
           }`}
         suppressHydrationWarning
       >
@@ -671,11 +753,21 @@ export function ProtectedSidebarLayout({
                 <span className="pointer-events-none absolute inset-[2px] rounded-[14px] border border-white/12" />
               </>
             )}
+            <button
+              ref={closeMenuButtonRef}
+              type="button"
+              onClick={() => setMobileMenuPath(null)}
+              className="z-10 m-2 flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-semibold text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-cyan-300 md:hidden"
+            >
+              <span aria-hidden="true" className="text-xl leading-none">×</span>
+              {mobileMenuText("close")}
+            </button>
             <div className={`shrink-0 ${compact ? "p-2 px-1" : "border-b border-white/18 p-4"}`}>
               <div className={`flex items-center ${expanded ? "gap-3" : "justify-center"}`}>
                 <button
                   type="button"
                   onClick={() => {
+                    if (mobileMenuOpen) setMobileMenuPath(null);
                     setProfileView("info");
                     setIsProfileModalOpen(true);
                   }}
@@ -708,6 +800,7 @@ export function ProtectedSidebarLayout({
                         <button
                           type="button"
                           onClick={() => {
+                            if (mobileMenuOpen) setMobileMenuPath(null);
                             setProfileView("company");
                             setIsProfileModalOpen(true);
                           }}
@@ -732,6 +825,7 @@ export function ProtectedSidebarLayout({
               <button
                 type="button"
                 aria-label="Subir modulos"
+                tabIndex={mobileMenuOpen && !canScrollUp ? -1 : undefined}
                 onClick={() => scrollModules("up")}
                 className={`absolute left-1/2 top-1 z-10 -translate-x-1/2 rounded-full border border-white/30 bg-slate-900/35 px-3 py-0.5 text-xs text-white backdrop-blur-md transition ${canScrollUp ? "opacity-100" : "pointer-events-none opacity-0"
                   }`}
@@ -741,6 +835,7 @@ export function ProtectedSidebarLayout({
               <button
                 type="button"
                 aria-label="Bajar modulos"
+                tabIndex={mobileMenuOpen && !canScrollDown ? -1 : undefined}
                 onClick={() => scrollModules("down")}
                 className={`absolute bottom-1 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/30 bg-slate-900/35 px-3 py-0.5 text-xs text-white backdrop-blur-md transition ${canScrollDown ? "opacity-100" : "pointer-events-none opacity-0"
                   }`}
@@ -758,7 +853,7 @@ export function ProtectedSidebarLayout({
               <div
                 ref={navScrollRef}
                 onScroll={updateScrollHints}
-                className="hide-scrollbar relative h-full overflow-y-auto"
+                className="hide-scrollbar relative h-full overflow-y-auto max-md:overscroll-contain"
               >
 
                 {modulesError ? (
@@ -928,7 +1023,7 @@ export function ProtectedSidebarLayout({
 
             <div className={`shrink-0 ${compact ? "border-t border-white/12 py-1 px-2" : "border-t border-white/18 p-3"}`}>
               <div className="space-y-2">
-                <div className="relative">
+                <div className="relative hidden md:block">
                   <button
                     type="button"
                     onClick={() => {
@@ -1074,7 +1169,7 @@ export function ProtectedSidebarLayout({
         </div>
       </aside>
 
-      <section className="relative z-10 min-w-0 flex-1 p-2 md:p-2">
+      <section inert={mobileMenuOpen} className="relative z-10 min-w-0 flex-1 p-2 pt-16 md:p-2">
         <div
           id="contentSidebar"
           className={`h-full overflow-hidden rounded-3xl p-2 backdrop-blur-md ${isMounted ? "transition-all duration-500" : ""
@@ -1097,7 +1192,7 @@ export function ProtectedSidebarLayout({
       {/* Modal Unificado de Perfil de Usuario y Compañía */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 backdrop-blur-[1px] p-4 animate-in fade-in duration-200">
-          <div className="relative w-full max-w-4xl overflow-hidden rounded-[24px] border border-slate-200 bg-white p-6 text-slate-800 shadow-2xl transition-all duration-300 animate-in zoom-in-95 duration-200">
+          <div className="relative w-full max-w-4xl overflow-hidden rounded-[24px] border border-slate-200 bg-white p-4 text-slate-800 shadow-2xl transition-all duration-300 animate-in zoom-in-95 duration-200 max-md:max-h-[calc(100dvh-2rem)] max-md:overflow-y-auto max-md:overscroll-contain md:p-6">
             {/* Confirmación cambio de compañía como overlay */}
             {confirmCompanyChange && (
               <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/40 backdrop-blur-[1px] p-4">
@@ -1311,7 +1406,7 @@ export function ProtectedSidebarLayout({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100 mt-6">
+                  <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-100 mt-6 max-md:flex-wrap">
                     <button
                       type="button"
                       onClick={() => setIsProfileModalOpen(false)}

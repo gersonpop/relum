@@ -60,8 +60,11 @@ Prioridad alta
 
 Prioridad media
 - [ ] Dominio propio `relum.app` / `relum.co` (comprar, DNS, Coolify, Google y Microsoft).
-- [ ] Mejoras de usabilidad pendientes de la auditoría inicial: registro en pasos con etiquetas,
-      acciones de tablas con texto, menú móvil, diálogos accesibles (Esc, foco), confirmaciones.
+- [x] Mejoras de usabilidad de la auditoría inicial: registro en pasos con etiquetas, acciones de tablas
+      con texto, menú móvil, diálogos accesibles (Esc, foco), confirmaciones (tareas 002–004).
+- [ ] En celular, las secciones con submenú (Usuarios, Empresa, Configuración) esconden el contenido
+      debajo del submenú.
+- [ ] Probar el registro en pasos con una cuenta nueva en producción.
 - [ ] Reemplazar imágenes de fondo heredadas de FluidSell en login y registro.
 - [ ] Cliente OAuth de Google propio para Relum (hoy usa el de FluidSell).
 - [ ] Rotar `AUTH_SECRET` (re-cifrando permisos) para separar del todo a Relum de FluidSell.

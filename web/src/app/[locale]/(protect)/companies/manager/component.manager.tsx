@@ -1,11 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { getSecureItem } from "@/lib/secure-store";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog } from "@/components/ui/dialog";
 
 const DEFAULT_COLUMNS = ["commercialName", "legalName", "taxId", "phone", "status", "actions"];
 
 export function DataManager({ currentUserEmail, currentUserImage, currentUserProvider, isSU, currentUserCompanyId, currentUserRole }: { currentUserEmail?: string; currentUserImage?: string; currentUserProvider?: string; isSU?: boolean; currentUserCompanyId?: string; currentUserRole?: string }) {
+  const dialogs = useTranslations("dialogs");
   const permissions = useMemo(() => {
     if (isSU) {
       return { read: true, create: true, update: true, delete: true };
@@ -45,7 +49,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(DEFAULT_COLUMNS));
   const [openDrawer, setOpenDrawer] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [branchError, setBranchError] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionMode, setActionMode] = useState("add"); // "add" | "edit"
   const [selectedRow, setSelectedRow] = useState<any>(null);
@@ -124,38 +128,10 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
   }, [currentDetailsRow, sucursalesCache]);
 
   const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
     title: string;
-    message: string;
-    onConfirm: () => void | Promise<void>;
-    confirmLabel?: string;
-    confirmVariant?: "danger" | "warning";
-  }>({
-    isOpen: false,
-    title: "",
-    message: "",
-    onConfirm: () => { }
-  });
-
-  const showConfirm = (
-    title: string,
-    message: string,
-    onConfirm: () => void | Promise<void>,
-    confirmLabel = "Confirmar",
-    confirmVariant: "danger" | "warning" = "danger"
-  ) => {
-    setConfirmModal({
-      isOpen: true,
-      title,
-      message,
-      onConfirm: async () => {
-        await onConfirm();
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-      },
-      confirmLabel,
-      confirmVariant
-    });
-  };
+    description: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const defaultForm = {
     commercialName: "",
@@ -188,10 +164,10 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
   const allColumns = useMemo(
     () => {
       const cols = [
-        { key: "id", label: "ID Compañía" },
+        { key: "id", label: "Identificador de compañía" },
         { key: "commercialName", label: "Nombre Comercial" },
         { key: "legalName", label: "Razón Social" },
-        { key: "taxId", label: "NIT / Tax ID" },
+        { key: "taxId", label: "NIT" },
         { key: "sector", label: "Sector" },
         { key: "phone", label: "Teléfono" },
         { key: "status", label: "Estado" }
@@ -367,15 +343,12 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
     setActiveDetailsTab("principal");
   };
 
-  const closeDrawer = () => {
-    setDrawerVisible(false);
-    window.setTimeout(() => setOpenDrawer(false), 220);
-  };
+  const closeDrawer = () => setOpenDrawer(false);
 
   const openAddSucursalDrawer = () => {
     setSucursalForm(defaultSucursalForm);
+    setBranchError("");
     setOpenDrawer(true);
-    window.setTimeout(() => setDrawerVisible(true), 10);
   };
 
   const addSucursal = (newSucursal: any) => {
@@ -399,7 +372,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
 
   const handleSaveSucursal = () => {
     if (!sucursalForm.name.trim() || !sucursalForm.address.trim() || !sucursalForm.city.trim() || !sucursalForm.phone.trim()) {
-      showToast("Por favor, completa todos los campos requeridos (*).", "warning");
+      setBranchError("Completa todos los campos obligatorios (*).");
       return;
     }
     addSucursal(sucursalForm);
@@ -440,8 +413,23 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
     return Object.keys(errs).length === 0;
   };
 
-  const saveItem = async () => {
+  const requestSave = () => {
     if (!validate()) return;
+    const statusChanged = viewingDetailsRow && form.status !== (viewingDetailsRow.status || "TRIAL");
+    if (statusChanged && (form.status === "SUSPENDED" || form.status === "CANCELLED")) {
+      const suspended = form.status === "SUSPENDED";
+      const name = String(viewingDetailsRow.commercialName || viewingDetailsRow.legalName || viewingDetailsRow.id);
+      setConfirmModal({
+        title: dialogs(suspended ? "suspendCompany" : "cancelCompanySubscription"),
+        description: dialogs(suspended ? "suspendCompanyDescription" : "cancelCompanySubscriptionDescription", { name }),
+        onConfirm: saveItem
+      });
+      return;
+    }
+    void saveItem();
+  };
+
+  const saveItem = async () => {
     setSaving(true);
     try {
       const isEdit = viewingDetailsRow !== null;
@@ -470,15 +458,15 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
     }
   };
 
-  const deleteItem = async (rowId: any) => {
+  const deleteItem = (rowId: unknown, name: string) => {
     if (!isSU) {
       showToast("Solo el Super Usuario puede eliminar compañías del sistema.", "warning");
       return;
     }
-    showConfirm(
-      "¿Eliminar esta compañía?",
-      "Esta acción eliminará definitivamente la compañía y todos los datos asociados del sistema. ¿Deseas continuar?",
-      async () => {
+    setConfirmModal({
+      title: dialogs("deleteCompany"),
+      description: `${dialogs("deleteCompanyDescription", { name })} ${dialogs("irreversible")}`,
+      onConfirm: async () => {
         try {
           const response = await fetch("/api/v1/db/companies", {
             method: "DELETE",
@@ -492,10 +480,8 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
         } catch (err) {
           showToast(err instanceof Error ? err.message : "No se pudo eliminar", "error");
         }
-      },
-      "Eliminar",
-      "danger"
-    );
+      }
+    });
   };
 
   const toggleColumn = (columnKey: string) => {
@@ -582,13 +568,13 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                 {/* Info Rows */}
                 <div className="w-full space-y-4 px-2 select-none">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider block uppercase">ID Compañía</span>
+                    <span className="text-[10px] font-bold text-slate-400 tracking-wider block uppercase">Identificador de compañía</span>
                     <span className="text-slate-800 text-sm font-semibold font-mono block mt-0.5 select-all">
                       {isAdding ? "—" : currentDetailsRow.id}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 tracking-wider block uppercase">NIT / Tax ID</span>
+                    <span className="text-[10px] font-bold text-slate-400 tracking-wider block uppercase">NIT</span>
                     <span className="text-slate-800 text-sm font-semibold font-mono block mt-0.5 select-all">
                       {(isAdding ? form.taxId : currentDetailsRow.taxId) || "—"}
                     </span>
@@ -666,7 +652,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                       </label>
 
                       <label className="block">
-                        <span className="text-xs font-semibold text-slate-600">NIT / Tax ID</span>
+                        <span className="text-xs font-semibold text-slate-600">NIT</span>
                         <input
                           value={form.taxId}
                           disabled={!isAdding && (!isEditing || !canEditCompany(currentDetailsRow?.id))}
@@ -973,7 +959,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={saveItem}
+                      onClick={requestSave}
                       className="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm transition cursor-pointer"
                     >
                       {saving ? "Guardando..." : isAdding ? "Crear Compañía" : "Guardar Cambios"}
@@ -987,7 +973,7 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                         onClick={handleCancel}
                         className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition duration-150 cursor-pointer"
                       >
-                        ver mas empresas
+                        Ver más empresas
                       </button>
                     )}
                     {currentDetailsRow && canEditCompany(currentDetailsRow.id) && (
@@ -1131,9 +1117,10 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                                       });
                                       setActiveDetailsTab("principal");
                                     }}
-                                    className="flex items-center gap-3 hover:opacity-80 text-left focus:outline-none transition group select-none"
+                                    aria-label={`${dialogs("viewDetails")} — ${name}`}
+                                    className="flex items-center gap-3 hover:opacity-80 text-left focus-visible:outline-2 focus-visible:outline-blue-600 transition group select-none"
                                   >
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-sm uppercase">
+                                    <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-sm uppercase">
                                       {initials}
                                     </div>
                                     <span className="font-semibold text-slate-800 truncate group-hover:text-blue-600 group-hover:underline">{name}</span>
@@ -1171,39 +1158,33 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                                   <div className="flex items-center justify-center gap-1.5">
                                     {/* Editar */}
                                     {canEdit ? (
-                                      <div className="group relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => openEditDrawer(row)}
-                                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
-                                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                                            <path d="m15 5 4 4" />
-                                          </svg>
-                                        </button>
-                                        <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                          Editar
-                                        </span>
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditDrawer(row)}
+                                        aria-label={dialogs("edit")}
+                                        className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-blue-200 bg-blue-50 text-blue-600 shadow-sm hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition duration-150"
+                                      >
+                                        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
+                                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                          <path d="m15 5 4 4" />
+                                        </svg>
+                                        <span className="hidden sm:inline">{dialogs("edit")}</span>
+                                      </button>
                                     ) : null}
 
                                     {/* Eliminar */}
                                     {canDelete ? (
-                                      <div className="group relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => void deleteItem(row?.id)}
-                                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                          </svg>
-                                        </button>
-                                        <span className="absolute bottom-full left-1/2 z-30 mb-2 -translate-x-1/2 scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 transition duration-200 rounded border border-slate-200/60 bg-white/85 backdrop-blur px-2.5 py-1 text-2xs font-semibold text-slate-700 shadow-md whitespace-nowrap">
-                                          Eliminar
-                                        </span>
-                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteItem(row.id, row.commercialName || row.legalName || row.id)}
+                                        aria-label={dialogs("delete")}
+                                        className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap px-2 text-xs font-medium rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm hover:bg-rose-100 hover:border-rose-300 hover:text-rose-700 transition duration-150"
+                                      >
+                                        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-4.5 w-4.5">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                        </svg>
+                                        <span className="hidden sm:inline">{dialogs("delete")}</span>
+                                      </button>
                                     ) : null}
                                   </div>
                                 </td>
@@ -1252,25 +1233,12 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
       </div>
 
       {openDrawer ? (
-        <div className="fixed inset-0 z-50">
-          <div
-            className={`absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] transition-opacity duration-200 ${drawerVisible ? "opacity-100" : "opacity-0"}`}
-            onClick={closeDrawer}
-          />
-          <aside
-            className={`absolute right-0 top-0 h-full w-full max-w-[500px] bg-white p-6 shadow-2xl transition-transform duration-250 ease-out overflow-y-auto ${drawerVisible ? "translate-x-0" : "translate-x-full"}`}
-          >
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100 select-none">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">Agregar Sucursal</h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  Registra una nueva sucursal física, virtual o depósito para la compañía actual.
-                </p>
-              </div>
-              <button type="button" onClick={closeDrawer} className="text-2xl text-slate-400 hover:text-slate-655">×</button>
-            </div>
-
-            <div className="mt-5 space-y-4">
+        <Dialog title="Agregar sucursal" onClose={closeDrawer} placement="side" className="max-w-[500px]">
+          <div className="space-y-5">
+            <p className="text-xs text-slate-500">
+              Registra una nueva sucursal física, virtual o depósito para la compañía actual.
+            </p>
+            <div className="space-y-4">
               <label className="block">
                 <span className="text-xs font-semibold text-slate-600">Nombre de la Sucursal *</span>
                 <input
@@ -1327,7 +1295,8 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
               </label>
             </div>
 
-            <div className="mt-8 border-t border-slate-100 pt-5 flex justify-end gap-3 select-none">
+            {branchError && <p role="alert" className="text-sm text-rose-700">{branchError}</p>}
+            <div className="mt-8 border-t border-slate-100 pt-5 flex flex-wrap justify-end gap-3 select-none">
               <button
                 type="button"
                 onClick={closeDrawer}
@@ -1343,44 +1312,17 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
                 Agregar Sucursal
               </button>
             </div>
-          </aside>
-        </div>
+          </div>
+        </Dialog>
       ) : null}
 
-      {confirmModal.isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm transition-opacity duration-200" onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))} />
-          <div className="relative z-10 w-full max-w-md transform rounded-2xl bg-white p-6 shadow-2xl transition-all duration-200 scale-100 opacity-100 border border-slate-100">
-            <div className="flex flex-col items-center text-center">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-full ${confirmModal.confirmVariant === "danger" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-600"} mb-4`}>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor" className="h-6 w-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-800">{confirmModal.title}</h3>
-              <p className="mt-2 text-sm text-slate-500 leading-relaxed">{confirmModal.message}</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3 select-none">
-              <button
-                type="button"
-                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void confirmModal.onConfirm();
-                }}
-                className={`rounded-xl ${confirmModal.confirmVariant === "danger" ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-amber-500 hover:bg-amber-600 text-slate-900"} px-5 py-2.5 text-sm font-semibold transition shadow-sm`}
-              >
-                {confirmModal.confirmLabel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {confirmModal && (
+        <ConfirmDialog
+          {...confirmModal}
+          confirmLabel={confirmModal.title}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
 
       {/* Toasts Container */}
       <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[999] flex flex-col gap-2 max-w-md w-full pointer-events-none items-center px-4">
