@@ -1,13 +1,13 @@
 # Estado de Relum
 
-Última actualización: 2026-11-22.
+Última actualización: 2026-11-23.
 
 ## En producción
 
 | Pieza | Detalle |
 |---|---|
-| URL | **https://datafy.site** (también `www.datafy.site`), HTTPS con Let's Encrypt. La dirección temporal `relum.187.53.107.149.sslip.io` sigue respondiendo, pero el inicio de sesión ya va a `datafy.site` |
-| Dominio | `datafy.site`, comprado en Hostinger; registro A `@` → 187.53.107.149 y `www` CNAME → `datafy.site` |
+| URL | **https://relum.datafy.site** (`NEXTAUTH_URL`), HTTPS con Let's Encrypt. `datafy.site` y `www.datafy.site` redirigen (307) a `relum.datafy.site` desde la app (`next.config.ts`, tarea 014). La dirección temporal `relum.187.53.107.149.sslip.io` sigue respondiendo |
+| Dominio | `datafy.site`, comprado en Hostinger; registros A `@` y `relum` → 187.53.107.149, `www` CNAME → `datafy.site`. Una sola dirección para todas las empresas: el usuario elige su empresa (no hay subdominio por empresa) |
 | Código | GitHub `gersonpop/relum` (público), rama `main` |
 | Servidor | VPS Hostinger KVM 4, Ubuntu 24.04, IP 187.53.107.149 |
 | Orquestador de despliegue | Coolify (`http://187.53.107.149:8000`), proyecto **Relum** → entorno `production` |
@@ -56,6 +56,7 @@ volver a cifrarlos.
 | 42f8d5b | Solo entran usuarios registrados y aprobados; API 403 a cuentas no activas (tarea 008) |
 | d74a8ea | Solicitudes fallidas no bloquean el registro con otra red; envío compatible con índices reales (tarea 010) |
 | 076994b | Cancelar el registro no guarda nada en Onboarding; solo traza en AuditLog (tarea 011) |
+| (este commit) | `datafy.site` redirige a `relum.datafy.site` (tarea 014); dominio, `NEXTAUTH_URL`, Google y Microsoft actualizados |
 
 ## Pendientes (backlog)
 
