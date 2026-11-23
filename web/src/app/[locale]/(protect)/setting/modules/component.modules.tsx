@@ -202,8 +202,6 @@ export function ModulesConfigClient({actorId, actorRole, companyId}: Props) {
 
   const headers = useMemo(
     () => ({
-      Authorization: "Bearer local-dev-token",
-      "x-oauth-session": "active",
       "x-actor-id": actorId,
       "x-actor-role": actorRole,
       "x-company-id": companyId ?? "",

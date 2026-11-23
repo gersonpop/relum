@@ -114,8 +114,6 @@ export function CompanyManager({
 
   const headers = useMemo(
     () => ({
-      Authorization: "Bearer local-dev-token",
-      "x-oauth-session": "active",
       "x-actor-id": currentUserEmail || "anonymous",
       "x-actor-role": isSU ? "SU" : "cliente",
       "x-company-id": currentUserCompanyId || "",

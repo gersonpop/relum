@@ -1,12 +1,17 @@
 import {NextResponse} from "next/server";
+import {requireSuperUser} from "@/server/api-auth";
 import {createEpic, getScrumEpicsWithStories} from "@/server/scrumFileStore";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const auth = await requireSuperUser(request);
+  if ("error" in auth) return auth.error;
   const epics = await getScrumEpicsWithStories();
   return NextResponse.json({epics});
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSuperUser(request);
+  if ("error" in auth) return auth.error;
   const body = (await request.json()) as {
     title?: string;
     description?: string;

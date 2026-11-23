@@ -1,7 +1,11 @@
 import {NextResponse} from "next/server";
+import {requireSessionUser} from "@/server/api-auth";
 import {submitSocialOnboarding} from "@/server/auth/onboarding";
 
 export async function POST(request: Request) {
+  const auth = await requireSessionUser();
+  if ("error" in auth) return auth.error;
+
   try {
     const body = (await request.json()) as {
       email: string;
@@ -36,7 +40,9 @@ export async function POST(request: Request) {
       }
     };
 
-    const user = await submitSocialOnboarding({ ...body, metadata });
+    // El correo y la red social salen de la sesión, no del formulario.
+    const provider = (auth.user.provider ?? body.provider) as typeof body.provider;
+    const user = await submitSocialOnboarding({ ...body, email: auth.user.email, provider, metadata });
     return NextResponse.json({ok: true, user});
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";

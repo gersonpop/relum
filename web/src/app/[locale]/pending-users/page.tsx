@@ -17,7 +17,7 @@ export default async function PendingUsersPage({params}: PendingUsersPageProps) 
   }
 
   const pending = await listPendingApprovals();
-  const rawRole = String((session.user as {role?: string}).role ?? "SU").trim().toLowerCase();
+  const rawRole = String((session.user as {role?: string}).role ?? "cliente").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";
 
   const actorId = session.user.email ?? session.user.name ?? "anonymous";

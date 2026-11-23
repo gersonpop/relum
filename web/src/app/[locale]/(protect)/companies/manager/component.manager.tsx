@@ -178,8 +178,6 @@ export function DataManager({ currentUserEmail, currentUserImage, currentUserPro
 
   const headers = useMemo(
     () => ({
-      Authorization: "Bearer local-dev-token",
-      "x-oauth-session": "active",
       "x-actor-id": currentUserEmail ?? "companies-manager-ui",
       "x-actor-role": isSU ? "SU" : (currentUserRole || "cliente"),
       "x-company-id": currentUserCompanyId ?? ""

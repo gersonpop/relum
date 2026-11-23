@@ -1,9 +1,15 @@
 import {NextResponse} from "next/server";
+import {requireSessionUser} from "@/server/api-auth";
 import {cancelSocialOnboarding, OnboardingCancelInput} from "@/server/auth/onboarding";
 
 export async function POST(request: Request) {
+  const auth = await requireSessionUser();
+  if ("error" in auth) return auth.error;
+
   try {
-    const body = (await request.json()) as Omit<OnboardingCancelInput, "metadata">;
+    const rawBody = (await request.json()) as Omit<OnboardingCancelInput, "metadata">;
+    // El correo y la red social salen de la sesión, no del formulario.
+    const body = {...rawBody, email: auth.user.email, provider: (auth.user.provider ?? rawBody.provider) as typeof rawBody.provider};
 
     if (!body.email || !body.provider) {
       return NextResponse.json({message: "Email and provider are required"}, {status: 400});

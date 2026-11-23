@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options";
 import { getPgPool } from "@/server/postgres";
 import type { ActorContext } from "@/server/pgDynamicDbStore";
 import { redirect } from "next/navigation";
+import { isDevFakeSessionEnabled } from "@/server/api-auth";
 
 export interface ResolvedUserContext {
   session: any;
@@ -17,7 +18,8 @@ export interface ResolvedUserContext {
 export async function resolveUserContext(locale: string): Promise<ResolvedUserContext> {
   let session = await getServerSession(authOptions);
   
-  if (process.env.NODE_ENV === "development" && !session) {
+  // Sesión falsa solo en desarrollo y solo con DEV_FAKE_SESSION=true en .env.local
+  if (isDevFakeSessionEnabled() && !session) {
     session = {
       user: {
         name: "Dev User",

@@ -159,8 +159,6 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
       const response = await fetch("/api/v1/upload", {
         method: "POST",
         headers: {
-          Authorization: headers.Authorization,
-          "x-oauth-session": headers["x-oauth-session"],
           "x-actor-id": headers["x-actor-id"],
           "x-actor-role": headers["x-actor-role"],
           "x-company-id": headers["x-company-id"],
@@ -185,8 +183,6 @@ export function OnboardingManager({ currentUserEmail, currentUserImage, currentU
 
   const headers = useMemo(
     () => ({
-      Authorization: "Bearer local-dev-token",
-      "x-oauth-session": "active",
       "x-actor-id": currentUserEmail ?? "onboarding-manager-ui",
       "x-actor-role": isSU ? "SU" : "cliente",
       "x-company-id": currentUserCompanyId || "",

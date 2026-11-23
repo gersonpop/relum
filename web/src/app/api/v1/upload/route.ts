@@ -1,19 +1,7 @@
 import { NextResponse } from "next/server";
+import { requireSessionUser } from "@/server/api-auth";
 import { ImageStorageService } from "@/server/storage";
 import { isCorsOriginAllowed, auditDenied } from "@/server/pgDynamicDbStore";
-
-type ActorContext = {
-  actorId: string;
-  role: "SU" | "cliente";
-  companyId: string | null;
-};
-
-function getActor(request: Request): ActorContext {
-  const actorId = request.headers.get("x-actor-id") ?? "anonymous";
-  const role = (request.headers.get("x-actor-role") ?? "cliente") as "SU" | "cliente";
-  const companyId = request.headers.get("x-company-id");
-  return { actorId, role, companyId: companyId && companyId.length > 0 ? companyId : null };
-}
 
 function withCors(response: NextResponse, request: Request) {
   const origin = request.headers.get("origin");
@@ -21,32 +9,25 @@ function withCors(response: NextResponse, request: Request) {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set("Vary", "Origin");
   }
-  response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, x-actor-id, x-actor-role, x-company-id, x-oauth-session");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, x-company-id, x-show-all-companies");
   response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   return response;
 }
 
 async function authorize(request: Request) {
-  const actor = getActor(request);
   const origin = request.headers.get("origin");
   if (!isCorsOriginAllowed(origin)) {
-    await auditDenied(actor, "upload", "CORS origin blocked");
-    return { error: withCors(NextResponse.json({ message: "CORS origin blocked" }, { status: 403 }), request) };
+    return {error: withCors(NextResponse.json({message: "CORS origin blocked"}, {status: 403}), request)};
   }
 
-  const auth = request.headers.get("authorization");
-  if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
-    await auditDenied(actor, "upload", "Missing or invalid Authorization header");
-    return { error: withCors(NextResponse.json({ message: "Unauthorized" }, { status: 401 }), request) };
+  // Solo exige sesión: quien completa su registro también sube su foto.
+  const result = await requireSessionUser();
+  if ("error" in result) {
+    await auditDenied({actorId: "anonymous", role: "cliente", companyId: null}, "upload", "No valid session");
+    return {error: withCors(result.error, request)};
   }
 
-  const oauthSession = request.headers.get("x-oauth-session");
-  if (oauthSession !== "active") {
-    await auditDenied(actor, "upload", "OAuth session not active");
-    return { error: withCors(NextResponse.json({ message: "OAuth session invalid or expired" }, { status: 401 }), request) };
-  }
-
-  return { actor };
+  return {user: result.user};
 }
 
 export async function OPTIONS(request: Request) {

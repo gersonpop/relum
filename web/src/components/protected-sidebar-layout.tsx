@@ -287,8 +287,6 @@ export function ProtectedSidebarLayout({
     setCompaniesLoading(true);
     fetch("/api/v1/db/companies", {
       headers: {
-        Authorization: "Bearer local-dev-token",
-        "x-oauth-session": "active",
         "x-actor-id": actorId,
         "x-actor-role": normalizedActorRole,
         "x-company-id": companyId ?? ""
@@ -334,8 +332,6 @@ export function ProtectedSidebarLayout({
     }
 
     const headers = {
-      Authorization: "Bearer local-dev-token",
-      "x-oauth-session": "active",
       "x-actor-id": actorId,
       "x-actor-role": normalizedActorRole,
       "x-company-id": companyId ?? ""
@@ -410,8 +406,6 @@ export function ProtectedSidebarLayout({
       const res = await fetch("/api/v1/db/users", {
         method: "PATCH",
         headers: {
-          Authorization: "Bearer local-dev-token",
-          "x-oauth-session": "active",
           "x-actor-id": actorId,
           "x-actor-role": normalizedActorRole,
           "x-company-id": companyId ?? "",
@@ -569,8 +563,6 @@ export function ProtectedSidebarLayout({
         params.append("table", "modules");
         const response = await fetch(`/api/v1/db/multi?${params.toString()}`, {
           headers: {
-            Authorization: "Bearer local-dev-token",
-            "x-oauth-session": "active",
             "x-actor-id": actorId,
             "x-actor-role": normalizedActorRole,
             "x-company-id": companyId ?? ""

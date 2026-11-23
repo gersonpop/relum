@@ -1,4 +1,5 @@
 import {NextResponse} from "next/server";
+import {requireSessionUser} from "@/server/api-auth";
 import {
   getCatalogCompanies,
   getCatalogCountries,
@@ -6,6 +7,8 @@ import {
 } from "@/server/auth/onboarding";
 
 export async function GET() {
+  const auth = await requireSessionUser();
+  if ("error" in auth) return auth.error;
   const [companies, countries, countryCodesFromMultidata, genders] = await Promise.all([
     getCatalogCompanies(),
     getCatalogCountries(),

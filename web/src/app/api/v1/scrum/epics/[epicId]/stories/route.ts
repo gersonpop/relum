@@ -1,9 +1,12 @@
 import {NextResponse} from "next/server";
+import {requireSuperUser} from "@/server/api-auth";
 import {createStory} from "@/server/scrumFileStore";
 
 type Params = {params: Promise<{epicId: string}>};
 
 export async function POST(request: Request, {params}: Params) {
+  const auth = await requireSuperUser(request);
+  if ("error" in auth) return auth.error;
   const {epicId} = await params;
   const body = (await request.json()) as {
     title?: string;

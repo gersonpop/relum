@@ -1,18 +1,7 @@
 import {NextResponse} from "next/server";
+import {requireApiActor} from "@/server/api-auth";
 import {auditDenied, isCorsOriginAllowed, listRecords, type ActorContext} from "@/server/pgDynamicDbStore";
 
-function getActor(request: Request): ActorContext {
-  const actorId = request.headers.get("x-actor-id") ?? "anonymous";
-  const role = (request.headers.get("x-actor-role") ?? "cliente") as "SU" | "cliente";
-  const companyId = request.headers.get("x-company-id");
-  const showAllCompanies = request.headers.get("x-show-all-companies") === "true";
-  return {
-    actorId,
-    role,
-    companyId: companyId && companyId.length > 0 ? companyId : null,
-    showAllCompanies
-  };
-}
 
 function withCors(response: NextResponse, request: Request) {
   const origin = request.headers.get("origin");
@@ -20,37 +9,24 @@ function withCors(response: NextResponse, request: Request) {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set("Vary", "Origin");
   }
-  response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, x-actor-id, x-actor-role, x-company-id, x-oauth-session");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, x-company-id, x-show-all-companies");
   response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
   return response;
 }
 
 async function authorize(request: Request) {
-  const actor = getActor(request);
   const origin = request.headers.get("origin");
   if (!isCorsOriginAllowed(origin)) {
-    await auditDenied(actor, "audit_logs", "CORS origin blocked");
     return {error: withCors(NextResponse.json({message: "CORS origin blocked"}, {status: 403}), request)};
   }
 
-  const auth = request.headers.get("authorization");
-  if (!auth || !auth.toLowerCase().startsWith("bearer ")) {
-    await auditDenied(actor, "audit_logs", "Missing or invalid Authorization header");
-    return {error: withCors(NextResponse.json({message: "Unauthorized"}, {status: 401}), request)};
+  const result = await requireApiActor(request);
+  if ("error" in result) {
+    await auditDenied({actorId: "anonymous", role: "cliente", companyId: null}, "audit_logs", "No valid session");
+    return {error: withCors(result.error, request)};
   }
 
-  const oauthSession = request.headers.get("x-oauth-session");
-  if (oauthSession !== "active") {
-    await auditDenied(actor, "audit_logs", "OAuth session not active");
-    return {error: withCors(NextResponse.json({message: "OAuth session invalid or expired"}, {status: 401}), request)};
-  }
-
-  if (actor.role !== "SU" && !actor.companyId) {
-    await auditDenied(actor, "audit_logs", "Missing companyId for non-SU actor");
-    return {error: withCors(NextResponse.json({message: "Forbidden"}, {status: 403}), request)};
-  }
-
-  return {actor};
+  return {actor: result.actor};
 }
 
 export async function OPTIONS(request: Request) {

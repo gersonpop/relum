@@ -211,8 +211,6 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
       const response = await fetch("/api/v1/upload", {
         method: "POST",
         headers: {
-          Authorization: "Bearer local-dev-token",
-          "x-oauth-session": "active",
           "x-actor-id": "users-manager-ui",
           "x-actor-role": "SU",
           "x-company-id": ""

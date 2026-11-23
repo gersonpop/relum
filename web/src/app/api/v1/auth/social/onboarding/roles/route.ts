@@ -1,7 +1,10 @@
 import {NextResponse} from "next/server";
+import {requireSessionUser} from "@/server/api-auth";
 import {getPgPool} from "@/server/postgres";
 
 export async function GET(request: Request) {
+  const auth = await requireSessionUser();
+  if ("error" in auth) return auth.error;
   try {
     const url = new URL(request.url);
     const companyId = url.searchParams.get("companyId");
