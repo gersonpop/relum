@@ -50,6 +50,7 @@ volver a cifrarlos.
 | 278db3f | `package-lock.json` sincronizado para npm 10 |
 | 40ee594 | Inicio de sesión con Microsoft |
 | 6ae7112 | Orquestación con Codex, documentación de Relum, healthcheck `/api/health` |
+| d50b34d | Usabilidad: menú móvil, registro en pasos, diálogos accesibles y confirmaciones (tareas 002–004) |
 
 ## Pendientes (backlog)
 
