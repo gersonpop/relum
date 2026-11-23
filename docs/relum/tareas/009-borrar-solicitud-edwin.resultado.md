@@ -1,0 +1,3 @@
+Creé [009-borrar-solicitud-edwin.sql](/Users/gersonpop/Documents/Proyectos/Proyecto%20Gestion%20OT/docs/relum/scripts/009-borrar-solicitud-edwin.sql). En una sola transacción, el script borra las dos solicitudes de Edwin Saldaña y revierte el cambio si el conteo difiere, si para ese correo no queda únicamente la solicitud de Gerson Porras o si el total final difiere de 12. Si las comprobaciones pasan, muestra la solicitud restante y el total.
+
+Revisé el SQL contra el esquema del repositorio. La ejecución y la comprobación en producción quedan a cargo del orquestador. Solo agregué el archivo SQL y no hice commit.
