@@ -16,10 +16,10 @@ export class ImageStorageService {
         return await this.uploadToCloudinary(fileBuffer, mimeType);
       } catch (err) {
         console.warn("Cloudinary upload failed, falling back to local storage:", err);
-        return await this.uploadToLocal(fileBuffer, fileName);
+        return await this.uploadToLocal(fileBuffer, fileName, mimeType);
       }
     } else {
-      return await this.uploadToLocal(fileBuffer, fileName);
+      return await this.uploadToLocal(fileBuffer, fileName, mimeType);
     }
   }
 
@@ -56,15 +56,21 @@ export class ImageStorageService {
     return resBody.secure_url;
   }
 
-  private static async uploadToLocal(fileBuffer: Buffer, fileName: string): Promise<string> {
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
+  private static async uploadToLocal(fileBuffer: Buffer, fileName: string, mimeType?: string): Promise<string> {
+    // En producción (Docker) UPLOADS_DIR apunta a un volumen persistente y las fotos se sirven
+    // por /api/v1/files/<nombre>. Sin UPLOADS_DIR (desarrollo) se guardan en public/uploads.
+    const customDir = process.env.UPLOADS_DIR;
+    const uploadsDir = customDir || path.join(process.cwd(), "public", "uploads");
     await fs.mkdir(uploadsDir, { recursive: true });
 
-    const ext = path.extname(fileName) || ".png";
+    // La extensión sale del tipo de archivo validado, nunca del nombre que manda el usuario.
+    const extByMime: Record<string, string> = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"};
+    void fileName;
+    const ext = (mimeType && extByMime[mimeType]) || ".png";
     const uniqueName = `avatar-${Date.now()}-${Math.floor(Math.random() * 100000)}${ext}`;
     const filePath = path.join(uploadsDir, uniqueName);
 
     await fs.writeFile(filePath, fileBuffer);
-    return `/uploads/${uniqueName}`;
+    return customDir ? `/api/v1/files/${uniqueName}` : `/uploads/${uniqueName}`;
   }
 }

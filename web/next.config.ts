@@ -6,6 +6,8 @@ import {fileURLToPath} from "node:url";
 const webRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  // Genera un servidor autónomo para la imagen Docker (ver Dockerfile).
+  output: "standalone",
   allowedDevOrigins: ["192.168.50.172"],
   turbopack: {
     root: webRoot
