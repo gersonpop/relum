@@ -6,7 +6,8 @@
 
 | Pieza | Detalle |
 |---|---|
-| URL | https://relum.187.53.107.149.sslip.io (temporal, HTTPS con Let's Encrypt) |
+| URL | **https://datafy.site** (también `www.datafy.site`), HTTPS con Let's Encrypt. La dirección temporal `relum.187.53.107.149.sslip.io` sigue respondiendo, pero el inicio de sesión ya va a `datafy.site` |
+| Dominio | `datafy.site`, comprado en Hostinger; registro A `@` → 187.53.107.149 y `www` CNAME → `datafy.site` |
 | Código | GitHub `gersonpop/relum` (público), rama `main` |
 | Servidor | VPS Hostinger KVM 4, Ubuntu 24.04, IP 187.53.107.149 |
 | Orquestador de despliegue | Coolify (`http://187.53.107.149:8000`), proyecto **Relum** → entorno `production` |
@@ -24,7 +25,7 @@
 
 ### Inicio de sesión
 
-- **Google:** cliente OAuth "fluidsell" del proyecto GCP `agrotrack-436721` (compartido con FluidSell).
+- **Google:** cliente OAuth "fluidsell" del proyecto GCP `agrotrack-436721` (compartido con FluidSell); tiene origen y retorno de `datafy.site`.
 - **Microsoft:** app "Relum" en Microsoft Entra (cuenta personal del autor), multiinquilino + cuentas
   personales, notificaciones opcionales `email` y `xms_edov`. El secreto vence en 24 meses.
   Cuentas de empresa de otras organizaciones necesitan verificación de editor o aprobación de su administrador.
@@ -60,7 +61,8 @@ Prioridad alta
 - [ ] Módulos propios de mantenimiento: equipos/activos, órdenes de trabajo, planes preventivos, reportes.
 
 Prioridad media
-- [ ] Dominio propio `relum.app` / `relum.co` (comprar, DNS, Coolify, Google y Microsoft).
+- [x] Dominio propio: `datafy.site` (DNS en Hostinger, Coolify, `NEXTAUTH_URL`, Google y Microsoft) — 2026-11-22.
+- [ ] Facebook y LinkedIn: agregar `https://datafy.site/api/auth/callback/{facebook,linkedin}` en sus apps (heredadas de FluidSell) o quitar esos botones.
 - [x] Mejoras de usabilidad de la auditoría inicial: registro en pasos con etiquetas, acciones de tablas
       con texto, menú móvil, diálogos accesibles (Esc, foco), confirmaciones (tareas 002–004).
 - [ ] En celular, las secciones con submenú (Usuarios, Empresa, Configuración) esconden el contenido
