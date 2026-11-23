@@ -88,4 +88,6 @@ Prioridad baja
 - [x] Solicitudes de «Edwin Saldaña» borradas (tarea 009). Copia previa:
       `/var/lib/postgresql/data/respaldo-antes-borrar-edwin-20261123.dump`.
 - [x] Una solicitud «fallida» ya no bloquea registrarse con otra red (tarea 010).
-- [ ] Limpiar el resto de datos heredados: empresas Alfa/Beta/Gamma y 12 solicitudes de registro (`Onboarding`).
+- [x] Solicitudes de registro heredadas borradas: `Onboarding` vacía (tarea 012). Copia previa:
+      `/var/lib/postgresql/data/respaldo-antes-borrar-solicitudes-heredadas-20261123.dump`.
+- [ ] Limpiar el resto de datos heredados: empresas Alfa/Beta/Gamma.

@@ -1,0 +1,3 @@
+Creé el [script SQL de la tarea 012](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/docs/relum/scripts/012-borrar-solicitudes-heredadas.sql>). En una sola transacción comprueba las referencias por llaves foráneas, exige borrar exactamente las 12 solicitudes del listado creadas antes del 22 de noviembre de 2026 y muestra cuántas quedan en total y cuántas se crearon desde esa fecha.
+
+Verifiqué estáticamente los 12 identificadores, la fecha de corte y las condiciones de cancelación. La ejecución queda a cargo del orquestador. No me conecté a ninguna base de datos ni hice commit.
