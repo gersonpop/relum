@@ -47,7 +47,7 @@ Desde el 2026-11-22 el trabajo se reparte así:
 
 | # | Tarea | Agente | Estado | Commit |
 |---|---|---|---|---|
-| 001 | Healthcheck de la app (`/api/health`) | Codex | terminada y verificada | (este commit) |
+| 001 | Healthcheck de la app (`/api/health`) | Codex | terminada, verificada y en producción | 6ae7112 |
 
 ## Lecciones aprendidas
 

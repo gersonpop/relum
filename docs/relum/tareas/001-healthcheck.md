@@ -47,7 +47,8 @@ Verificación del orquestador (2026-11-22):
 - `next build` completo (con red): exitoso, `/api/health` aparece como ruta dinámica (ƒ).
 - Servidor standalone con base de datos inaccesible: responde `503 {"status":"error","database":"error"}`
   con `Cache-Control: no-store`, sin detalles internos.
-- Caso correcto (200) se verifica en producción tras el despliegue.
+- Producción (despliegue 6ae7112): `GET /api/health` → `200 {"status":"ok","database":"ok"}` con la base
+  real, y Coolify pasó de "Running (no healthcheck)" a "Running".
 
 Nota: el sandbox de Codex no tiene red, así que no puede descargar Google Fonts para el build;
 el build completo lo corre siempre el orquestador.

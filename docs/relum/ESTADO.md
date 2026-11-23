@@ -13,6 +13,7 @@
 | App | recurso **relum-web**: build con `web/Dockerfile` (base `/web`), puerto 3000 |
 | Base de datos | recurso **relum-db**: PostgreSQL 17, base/usuario `relum`, acceso **privado** (solo red interna) |
 | Fotos subidas | volumen `relum-uploads` montado en `/app/data`; se sirven por `/api/v1/files/<nombre>` |
+| Salud | `GET /api/health` (200 si la base responde); Coolify lo usa como healthcheck |
 | Despliegue | manual: botón **Deploy/Redeploy** en Coolify (toma el último commit de `main`) |
 
 ### Variables de entorno (en Coolify, nunca en git)
@@ -48,6 +49,7 @@ volver a cifrarlos.
 | 1bbb9f0 | Dockerfile, build standalone, fotos en volumen persistente |
 | 278db3f | `package-lock.json` sincronizado para npm 10 |
 | 40ee594 | Inicio de sesión con Microsoft |
+| 6ae7112 | Orquestación con Codex, documentación de Relum, healthcheck `/api/health` |
 
 ## Pendientes (backlog)
 
