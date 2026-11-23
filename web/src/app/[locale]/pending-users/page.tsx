@@ -1,7 +1,5 @@
-import {getServerSession} from "next-auth";
-import {redirect} from "next/navigation";
 import {ProtectedSidebarLayout} from "@/components/protected-sidebar-layout";
-import {authOptions} from "@/lib/auth-options";
+import {requireActivePageSession} from "@/lib/server-session-helper";
 import {listPendingApprovals} from "@/server/auth/onboarding";
 import {PendingUsersClient} from "./PendingUsersClient";
 
@@ -11,10 +9,7 @@ type PendingUsersPageProps = {
 
 export default async function PendingUsersPage({params}: PendingUsersPageProps) {
   const {locale} = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) {
-    redirect(`/${locale}`);
-  }
+  const session = await requireActivePageSession(locale);
 
   const pending = await listPendingApprovals();
   const rawRole = String((session.user as {role?: string}).role ?? "cliente").trim().toLowerCase();

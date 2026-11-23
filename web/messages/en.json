@@ -1,4 +1,10 @@
 {
+  "accessGate": {
+    "pendingTitle": "Request under review",
+    "approvalRequired": "An administrator at your company must approve your account before you can sign in.",
+    "inactiveTitle": "Account deactivated",
+    "inactive": "Your account is deactivated. Ask an administrator at your company to reactivate it."
+  },
   "dialogs": {
     "close": "Close",
     "cancel": "Cancel",

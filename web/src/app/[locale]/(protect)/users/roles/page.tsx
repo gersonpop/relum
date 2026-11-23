@@ -1,5 +1,4 @@
-import {getServerSession} from "next-auth";
-import {authOptions} from "@/lib/auth-options";
+import {requireActivePageSession} from "@/lib/server-session-helper";
 import {NewPagePattern} from "@/components/module-patterns/NewPagePattern";
 import DynamicComponent from "./component.roles";
 
@@ -8,10 +7,11 @@ type PageProps = {
 };
 
 export default async function DynamicNewPage({params}: PageProps) {
-  const session = await getServerSession(authOptions);
-  const actorId = session?.user?.email ?? "anonymous";
-  const actorRole = (session?.user as any)?.role ?? "cliente";
-  const companyId = (session?.user as any)?.companyId ?? "";
+  const {locale} = await params;
+  const session = await requireActivePageSession(locale);
+  const actorId = session.user.email;
+  const actorRole = session.user.role ?? "cliente";
+  const companyId = session.user.companyId ?? "";
 
   return (
     <NewPagePattern

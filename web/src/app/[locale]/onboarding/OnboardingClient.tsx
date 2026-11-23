@@ -36,6 +36,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
   const [pendingAction, setPendingAction] = useState<"save" | "cancel" | null>(null);
   const saving = pendingAction !== null;
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [showConflictModal, setShowConflictModal] = useState(!!conflictingProvider);
   const [showDniConflictModal, setShowDniConflictModal] = useState(false);
   const [dniConflictProvider, setDniConflictProvider] = useState<string | null>(null);
@@ -64,6 +65,12 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
   });
 
   useEffect(() => {
+    if (avatarPreview) return () => URL.revokeObjectURL(avatarPreview);
+  }, [avatarPreview]);
+
+  useEffect(() => {
+    if (conflictingProvider) return;
+
     async function loadBaseCatalogs() {
       const cacheKey = "onboarding_bootstrap";
       if (typeof window !== "undefined") {
@@ -111,7 +118,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
       }
     }
     void loadBaseCatalogs();
-  }, []);
+  }, [conflictingProvider]);
 
   useEffect(() => {
     if (!form.country) {
@@ -280,13 +287,8 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await fetch("/api/v1/upload", {
+      const response = await fetch("/api/v1/auth/social/onboarding/avatar", {
         method: "POST",
-        headers: {
-          "x-actor-id": "users-manager-ui",
-          "x-actor-role": "SU",
-          "x-company-id": ""
-        },
         body: formData
       });
 
@@ -296,6 +298,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
       }
 
       setForm((prev) => ({ ...prev, avatar: resBody.url }));
+      setAvatarPreview(URL.createObjectURL(file));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al subir el archivo");
     } finally {
@@ -346,6 +349,11 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
     setPendingAction("cancel");
     setError(null);
     try {
+      if (conflictingProvider) {
+        await signOut({callbackUrl: `/${locale}`});
+        return;
+      }
+
       const response = await fetch("/api/v1/auth/social/onboarding/cancel", {
         method: "POST",
         headers: {"content-type": "application/json"},
@@ -424,8 +432,8 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
                   ))}
                   <div className="flex min-w-0 items-center gap-3 border-t border-white/15 pt-4 sm:col-span-2">
                     <div aria-hidden="true" className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-cyan-300/15 text-sm font-semibold text-cyan-100">
-                      {form.avatar && /^(https?:\/\/|\/)/.test(form.avatar) ? (
-                        <img src={form.avatar} alt="" className="size-full object-cover" />
+                      {avatarPreview || /^(https?:\/\/|\/)/.test(form.avatar) ? (
+                        <img src={avatarPreview ?? form.avatar} alt="" className="size-full object-cover" />
                       ) : (
                         `${form.firstName[0] ?? ""}${form.lastName[0] ?? ""}`.toUpperCase() || "?"
                       )}
@@ -445,7 +453,10 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
                         <button
                           type="button"
                           disabled={uploadingAvatar}
-                          onClick={() => setForm((p) => ({...p, avatar: defaultAvatar}))}
+                          onClick={() => {
+                            setAvatarPreview(null);
+                            setForm((p) => ({...p, avatar: defaultAvatar}));
+                          }}
                           className="rounded text-sm text-cyan-200 underline underline-offset-4"
                         >
                           {t("useSocialPhoto")}

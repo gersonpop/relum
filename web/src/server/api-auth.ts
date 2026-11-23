@@ -2,8 +2,10 @@ import {getServerSession, type Session} from "next-auth";
 import {cookies} from "next/headers";
 import {NextResponse} from "next/server";
 import {authOptions} from "@/lib/auth-options";
+import {resolveSocialOnboarding, type ResolveFlow, type SocialProvider} from "@/server/auth/onboarding";
 import {getPgPool} from "@/server/postgres";
 import type {ActorContext} from "@/server/pgDynamicDbStore";
+import {accessGate} from "../../messages/es.json";
 
 /**
  * Identifica a quien llama a la API a partir de la sesión de NextAuth (cookie firmada),
@@ -18,7 +20,7 @@ export type SessionUser = {
   role: "SU" | "cliente";
   roleScope: string;
   companyId: string | null;
-  provider: string | null;
+  provider: SocialProvider;
 };
 
 export type ApiActor = ActorContext & {user: SessionUser};
@@ -55,7 +57,7 @@ function toSessionUser(session: Session | null): SessionUser | null {
     role: rawRole === "su" ? "SU" : "cliente",
     roleScope: String(user.roleScope ?? "User"),
     companyId: typeof user.companyId === "string" && user.companyId.length > 0 ? user.companyId : null,
-    provider: typeof user.provider === "string" ? user.provider : null
+    provider: (user.provider as SocialProvider | undefined) ?? "google"
   };
 }
 
@@ -63,12 +65,31 @@ function json(message: string, status: number) {
   return NextResponse.json({message}, {status});
 }
 
-/** Exige una sesión iniciada (también vale para quien está completando su registro). */
-export async function requireSessionUser(): Promise<SessionResult> {
-  const user = toSessionUser(await getServerSession(authOptions));
-  if (user) return {user};
-  if (isDevFakeSessionEnabled()) return {user: devFakeUser()};
+async function resolveSessionAccess(): Promise<{user: SessionUser; flow: ResolveFlow} | {error: NextResponse}> {
+  const session = await getServerSession(authOptions);
+  const user = toSessionUser(session);
+  if (user) {
+    const {flow} = await resolveSocialOnboarding(user.email, user.provider);
+    return {user, flow};
+  }
+  if (!session && isDevFakeSessionEnabled()) return {user: devFakeUser(), flow: "ACTIVE"};
   return {error: json("Inicia sesión para continuar.", 401)};
+}
+
+/** Exige una cuenta activa para usar la aplicación. */
+export async function requireSessionUser(): Promise<SessionResult> {
+  const result = await resolveSessionAccess();
+  if ("error" in result) return result;
+  if (result.flow === "ACTIVE") return {user: result.user};
+  return {error: json(result.flow === "INACTIVE" ? accessGate.inactive : accessGate.approvalRequired, 403)};
+}
+
+/** Limita las acciones del formulario de registro a quien puede completarlo. */
+export async function requireOnboardingSessionUser(): Promise<SessionResult> {
+  const result = await resolveSessionAccess();
+  if ("error" in result) return result;
+  if (result.flow === "FORM_REQUIRED") return {user: result.user};
+  return {error: json(result.flow === "INACTIVE" ? accessGate.inactive : accessGate.approvalRequired, 403)};
 }
 
 async function belongsToCompany(user: SessionUser, companyId: string) {

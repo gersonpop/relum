@@ -20,7 +20,7 @@ export default async function HomePage({params}: HomePageProps) {
   const {locale} = await params;
   const session = await getServerSession(authOptions);
 
-  if (session?.user) {
+  if (session?.user?.email) {
     redirect(`/${locale}/home`);
   }
 

@@ -1,4 +1,10 @@
 {
+  "accessGate": {
+    "pendingTitle": "Solicitud en revisión",
+    "approvalRequired": "Un administrador de tu empresa debe aprobar tu cuenta para que puedas entrar.",
+    "inactiveTitle": "Cuenta desactivada",
+    "inactive": "Tu cuenta está desactivada. Pide a un administrador de tu empresa que la active."
+  },
   "dialogs": {
     "close": "Cerrar",
     "cancel": "Cancelar",

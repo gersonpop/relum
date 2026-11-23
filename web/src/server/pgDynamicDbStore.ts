@@ -225,9 +225,7 @@ async function ensureModuleRouteScaffold(route: string | null, pageContent: stri
     const layoutFile = join(routeDir, "layout.tsx");
     const pageFile = join(routeDir, "page.tsx");
 
-    const layoutContent = `import {getServerSession} from "next-auth";
-import {redirect} from "next/navigation";
-import {authOptions} from "@/lib/auth-options";
+    const layoutContent = `import {requireActivePageSession} from "@/lib/server-session-helper";
 import {listRecords, type ActorContext} from "@/server/pgDynamicDbStore";
 import {selectSidebarModulesFromDbRows} from "@/lib/sidebar-access";
 import {ProtectedSidebarLayout} from "@/components/protected-sidebar-layout";
@@ -240,8 +238,7 @@ type LayoutProps = {
 
 export default async function DynamicEmbeddedLayout({params, children}: LayoutProps) {
   const {locale} = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/" + locale);
+  const session = await requireActivePageSession(locale);
 
   const rawRole = String((session.user as {role?: string}).role ?? "SU").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";
@@ -292,9 +289,8 @@ export default async function DynamicEmbeddedLayout({params, children}: LayoutPr
   );
 }`;
 
-    const pageContentTemplate = `import {getServerSession} from "next-auth";
+    const pageContentTemplate = `import {requireActivePageSession} from "@/lib/server-session-helper";
 import {redirect} from "next/navigation";
-import {authOptions} from "@/lib/auth-options";
 import {listRecords, type ActorContext} from "@/server/pgDynamicDbStore";
 
 type PageProps = {
@@ -303,8 +299,7 @@ type PageProps = {
 
 export default async function DynamicEmbeddedPage({params}: PageProps) {
   const {locale} = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/" + locale);
+  const session = await requireActivePageSession(locale);
 
   const rawRole = String((session.user as {role?: string}).role ?? "SU").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";
@@ -355,9 +350,7 @@ export default async function DynamicEmbeddedPage({params}: PageProps) {
 
     let pageTemplate = "";
     if (isRootModule) {
-      pageTemplate = `import {getServerSession} from "next-auth";
-import {redirect} from "next/navigation";
-import {authOptions} from "@/lib/auth-options";
+      pageTemplate = `import {requireActivePageSession} from "@/lib/server-session-helper";
 import {listRecords, type ActorContext} from "@/server/pgDynamicDbStore";
 import {selectSidebarModulesFromDbRows} from "@/lib/sidebar-access";
 import {ProtectedSidebarLayout} from "@/components/protected-sidebar-layout";
@@ -370,8 +363,7 @@ type PageProps = {
 
 export default async function DynamicNewPage({params}: PageProps) {
   const {locale} = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/" + locale);
+  const session = await requireActivePageSession(locale);
 
   const rawRole = String((session.user as {role?: string}).role ?? "SU").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";
@@ -410,9 +402,7 @@ export default async function DynamicNewPage({params}: PageProps) {
   );
 }`;
     } else {
-      pageTemplate = `import {getServerSession} from "next-auth";
-import {redirect} from "next/navigation";
-import {authOptions} from "@/lib/auth-options";
+      pageTemplate = `import {requireActivePageSession} from "@/lib/server-session-helper";
 import {listRecords, type ActorContext} from "@/server/pgDynamicDbStore";
 import {NewPagePattern} from "@/components/module-patterns/NewPagePattern";
 import DynamicComponent from "./component.${baseName}";
@@ -423,8 +413,7 @@ type PageProps = {
 
 export default async function DynamicNewPage({params}: PageProps) {
   const {locale} = await params;
-  const session = await getServerSession(authOptions);
-  if (!session?.user) redirect("/" + locale);
+  const session = await requireActivePageSession(locale);
 
   const rawRole = String((session.user as {role?: string}).role ?? "SU").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";

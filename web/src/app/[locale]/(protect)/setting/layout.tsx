@@ -1,10 +1,8 @@
-import {resolveLoginNavigation} from "@/server/loginAccess";
 import {listRecords} from "@/server/pgDynamicDbStore";
 import {selectSidebarModulesFromDbRows} from "@/lib/sidebar-access";
 import {ProtectedSidebarLayout} from "@/components/protected-sidebar-layout";
 import {EmbeddedPattern} from "@/components/module-patterns/EmbeddedPattern";
 import {resolveUserContext} from "@/lib/server-session-helper";
-import {redirect} from "next/navigation";
 
 export type SettingModule = {
   id: string;
@@ -30,10 +28,6 @@ function toSort(value: unknown) {
 
 export async function requireProtectedSettingContext(locale: string) {
   const {session, actor, companyName, userCargo, roleScope} = await resolveUserContext(locale);
-
-  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin" | "azure-ad"}).provider ?? "google");
-  const navigation = await resolveLoginNavigation(session.user.email, provider);
-  if (navigation.flow === "FORM_REQUIRED") redirect(`/${locale}/onboarding`);
 
   const rows = (await listRecords(actor, "modules", null)) as Array<Record<string, any>>;
   const modules: SettingModule[] = rows.map((row) => ({

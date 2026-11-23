@@ -1,9 +1,9 @@
 import {Pool} from "pg";
 
 export type OnboardingStatus = "active" | "inactive" | "pending_approval" | "failed";
-export type ResolveFlow = "ACTIVE" | "FORM_REQUIRED" | "PENDING_ONLY" | "PROVIDER_CONFLICT";
+export type ResolveFlow = "ACTIVE" | "FORM_REQUIRED" | "PENDING_ONLY" | "PROVIDER_CONFLICT" | "INACTIVE";
 
-type SocialProvider = "google" | "facebook" | "linkedin" | "azure-ad";
+export type SocialProvider = "google" | "facebook" | "linkedin" | "azure-ad";
 
 type UserRecord = {
   id: string;
@@ -162,7 +162,17 @@ function mapRowToUser(row: Record<string, unknown>): UserRecord {
   };
 }
 
-async function ensureUserStatusCatalog() {
+let userStatusCatalogPromise: Promise<void> | undefined;
+
+function ensureUserStatusCatalog() {
+  userStatusCatalogPromise ??= seedUserStatusCatalog().catch((error) => {
+    userStatusCatalogPromise = undefined;
+    throw error;
+  });
+  return userStatusCatalogPromise;
+}
+
+async function seedUserStatusCatalog() {
   const rows = await getPool().query('SELECT value FROM "st_Multidata" WHERE type=$1', ["userStatus"]);
   const existing = new Set(rows.rows.map((row) => String(row.value).toLowerCase()));
 
@@ -307,22 +317,20 @@ export async function getCatalogMultidata(group: string) {
 }
 
 export async function resolveSocialOnboarding(email: string, provider: SocialProvider): Promise<{flow: ResolveFlow; user: UserRecord | null}> {
-  await ensureUserStatusCatalog();
-  
   // 1. Check PlatformUser first
   const userRow = await getPool().query('SELECT * FROM "PlatformUser" WHERE lower("user_email")=lower($1) LIMIT 1', [email]);
   if ((userRow.rowCount ?? 0) > 0) {
     const user = mapRowToUser(userRow.rows[0]);
+    if (user.status === "inactive") {
+      return {flow: "INACTIVE", user};
+    }
     if (user.provider !== provider) {
       return {flow: "PROVIDER_CONFLICT", user};
     }
     if (user.status === "pending_approval") {
       return {flow: "PENDING_ONLY", user};
     }
-    if (user.status === "inactive") {
-      return {flow: "FORM_REQUIRED", user};
-    }
-    return {flow: "ACTIVE", user};
+    return {flow: user.status === "active" ? "ACTIVE" : "FORM_REQUIRED", user};
   }
 
   // 2. Check Onboarding table
@@ -596,7 +604,6 @@ export async function cancelSocialOnboarding(input: OnboardingCancelInput) {
 }
 
 export async function listPendingApprovals() {
-  await ensureUserStatusCatalog();
   const rows = await getPool().query('SELECT * FROM "Onboarding" WHERE "status"=$1 ORDER BY "created_at" DESC', ["pending_approval"]);
   return rows.rows.map((row) => ({
     id: String(row.id),

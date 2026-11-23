@@ -1,6 +1,6 @@
 # Tarea 008 — Solo entran a la app los usuarios registrados y aprobados
 
-Estado: en curso · Agente: Codex · Orquestador: Claude
+Estado: terminada · Agente: Codex · Orquestador: Claude
 
 ## Objetivo
 
@@ -58,3 +58,19 @@ usuario recién llegado puede abrir esas secciones sin registrarse ni ser aproba
   comprobaste, por ejemplo con una prueba o simulando `resolveSocialOnboarding`).
 - La API responde 403 a usuarios no activos fuera de las rutas del registro.
 - No hagas commit. No corras `npm run build` (lo corre el orquestador).
+
+## Resultado
+
+Implementado por Codex; resumen en `008-acceso-solo-aprobados.resultado.md`.
+
+Verificación del orquestador (2026-11-23):
+- Diff revisado: control central en `web/src/app/[locale]/(protect)/layout.tsx` y en `resolveUserContext`
+  (`requireActivePageSession`); flujo nuevo `INACTIVE`; la API (`requireSessionUser`/`requireApiActor`/
+  `requireSuperUser`) responde 403 a cuentas no activas; las rutas del registro usan
+  `requireOnboardingSessionUser` (solo `FORM_REQUIRED`); subida de foto del registro separada en
+  `/api/v1/auth/social/onboarding/avatar`; plantillas de módulos dinámicos también usan el control;
+  `ensureUserStatusCatalog` se ejecuta una vez por proceso.
+- `tsc --noEmit` sin errores, `next build` exitoso, lint sin errores nuevos.
+- Navegador (sesión activa de desarrollo): Roles carga, `/api/v1/db/modules` → 200 y
+  `/api/v1/auth/social/onboarding/bootstrap` → 403 (un usuario activo no puede reenviar el registro).
+- Pendiente: probar en producción con una cuenta nueva el recorrido registro → pendiente → aprobación.

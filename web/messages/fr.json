@@ -1,4 +1,10 @@
 {
+  "accessGate": {
+    "pendingTitle": "Demande en cours d’examen",
+    "approvalRequired": "Un administrateur de votre entreprise doit approuver votre compte avant que vous puissiez accéder à Relum.",
+    "inactiveTitle": "Compte désactivé",
+    "inactive": "Votre compte est désactivé. Demandez à un administrateur de votre entreprise de le réactiver."
+  },
   "dialogs": {
     "close": "Fermer",
     "cancel": "Annuler",

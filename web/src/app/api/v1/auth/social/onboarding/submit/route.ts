@@ -1,14 +1,13 @@
 import {NextResponse} from "next/server";
-import {requireSessionUser} from "@/server/api-auth";
+import {requireOnboardingSessionUser} from "@/server/api-auth";
 import {submitSocialOnboarding} from "@/server/auth/onboarding";
 
 export async function POST(request: Request) {
-  const auth = await requireSessionUser();
+  const auth = await requireOnboardingSessionUser();
   if ("error" in auth) return auth.error;
 
   try {
     const body = (await request.json()) as {
-      email: string;
       firstName: string;
       lastName: string;
       phone: string;
@@ -20,7 +19,6 @@ export async function POST(request: Request) {
       dni: string;
       birthDate: string;
       gender: string;
-      provider: "google" | "facebook" | "linkedin" | "azure-ad";
       avatar?: string;
     };
 
@@ -41,8 +39,7 @@ export async function POST(request: Request) {
     };
 
     // El correo y la red social salen de la sesión, no del formulario.
-    const provider = (auth.user.provider ?? body.provider) as typeof body.provider;
-    const user = await submitSocialOnboarding({ ...body, email: auth.user.email, provider, metadata });
+    const user = await submitSocialOnboarding({ ...body, email: auth.user.email, provider: auth.user.provider, metadata });
     return NextResponse.json({ok: true, user});
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";

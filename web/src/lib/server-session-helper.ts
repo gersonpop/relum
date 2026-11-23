@@ -1,13 +1,27 @@
-import { getServerSession } from "next-auth";
+import { cache } from "react";
+import { getServerSession, type Session } from "next-auth";
 import { cookies } from "next/headers";
 import { authOptions } from "@/lib/auth-options";
 import { getPgPool } from "@/server/postgres";
 import type { ActorContext } from "@/server/pgDynamicDbStore";
 import { redirect } from "next/navigation";
 import { isDevFakeSessionEnabled } from "@/server/api-auth";
+import { resolveSocialOnboarding, type SocialProvider } from "@/server/auth/onboarding";
+
+type ProtectedSession = Session & {
+  user: NonNullable<Session["user"]> & {
+    email: string;
+    role?: string;
+    roleScope?: string;
+    companyId?: string | null;
+    companyName?: string;
+    userCargo?: string;
+    provider?: SocialProvider;
+  };
+};
 
 export interface ResolvedUserContext {
-  session: any;
+  session: ProtectedSession;
   actor: ActorContext;
   companyName: string;
   userCargo: string;
@@ -15,12 +29,11 @@ export interface ResolvedUserContext {
   locale: string;
 }
 
-export async function resolveUserContext(locale: string): Promise<ResolvedUserContext> {
-  let session = await getServerSession(authOptions);
-  
-  // Sesión falsa solo en desarrollo y solo con DEV_FAKE_SESSION=true en .env.local
+export const requireActivePageSession = cache(async (locale: string): Promise<ProtectedSession> => {
+  const session = await getServerSession(authOptions);
+
   if (isDevFakeSessionEnabled() && !session) {
-    session = {
+    return {
       user: {
         name: "Dev User",
         email: "dev@relum.app",
@@ -33,16 +46,30 @@ export async function resolveUserContext(locale: string): Promise<ResolvedUserCo
         provider: "google"
       },
       expires: "2026-06-30T00:00:00.000Z"
-    } as any;
+    };
   }
 
-  if (!session?.user) {
+  const email = session?.user?.email;
+  if (!email) {
     redirect("/" + locale);
   }
 
-  const rawRole = String((session.user as { role?: string }).role ?? "cliente").trim().toLowerCase();
+  const provider = (session.user as { provider?: SocialProvider }).provider ?? "google";
+  const {flow} = await resolveSocialOnboarding(email, provider);
+  if (flow === "PENDING_ONLY" || flow === "INACTIVE") {
+    redirect(`/${locale}/pending-approval`);
+  }
+  if (flow !== "ACTIVE") {
+    redirect(`/${locale}/onboarding`);
+  }
+  return session as ProtectedSession;
+});
+
+export async function resolveUserContext(locale: string): Promise<ResolvedUserContext> {
+  const session = await requireActivePageSession(locale);
+  const rawRole = String(session.user.role ?? "cliente").trim().toLowerCase();
   const role: "SU" | "cliente" = rawRole === "su" ? "SU" : "cliente";
-  const roleScope = String((session.user as any).roleScope ?? "User");
+  const roleScope = String(session.user.roleScope ?? "User");
   
   const cookieStore = await cookies();
   const activeCompanyId = cookieStore.get("active_company_id")?.value;
@@ -50,7 +77,7 @@ export async function resolveUserContext(locale: string): Promise<ResolvedUserCo
   const isMulticompany = roleScope.toLowerCase() === "multicompany";
   const finalCompanyId = ((role === "SU" || isMulticompany) && activeCompanyId) 
     ? activeCompanyId 
-    : ((session.user as { companyId?: string | null }).companyId ?? null);
+    : (session.user.companyId ?? null);
 
   const actor: ActorContext = {
     actorId: session.user.email ?? session.user.name ?? "anonymous",
@@ -58,8 +85,8 @@ export async function resolveUserContext(locale: string): Promise<ResolvedUserCo
     companyId: finalCompanyId
   };
 
-  let companyName = (session.user as any).companyName ?? "";
-  let userCargo = (session.user as any).userCargo ?? "Miembro";
+  let companyName = session.user.companyName ?? "";
+  const userCargo = session.user.userCargo ?? "Miembro";
 
   // If SU or Multicompany user switched active company, fetch that company's name
   if ((role === "SU" || isMulticompany) && activeCompanyId) {

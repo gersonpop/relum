@@ -1,7 +1,7 @@
 import {getServerSession} from "next-auth";
 import {redirect} from "next/navigation";
 import {authOptions} from "@/lib/auth-options";
-import {resolveSocialOnboarding} from "@/server/auth/onboarding";
+import {resolveSocialOnboarding, type SocialProvider} from "@/server/auth/onboarding";
 import {OnboardingClient} from "./OnboardingClient";
 
 type OnboardingPageProps = {
@@ -15,14 +15,14 @@ export default async function OnboardingPage({params}: OnboardingPageProps) {
     redirect(`/${locale}`);
   }
 
-  const provider = ((session.user as {provider?: "google" | "facebook" | "linkedin" | "azure-ad"}).provider ?? "google");
+  const provider = (session.user as {provider?: SocialProvider}).provider ?? "google";
   const resolved = await resolveSocialOnboarding(session.user.email, provider);
 
   if (resolved.flow === "ACTIVE") {
     redirect(`/${locale}/home`);
   }
 
-  if (resolved.flow === "PENDING_ONLY") {
+  if (resolved.flow === "PENDING_ONLY" || resolved.flow === "INACTIVE") {
     redirect(`/${locale}/pending-approval`);
   }
 

@@ -1,16 +1,10 @@
 import {NextResponse} from "next/server";
+import {requireSessionUser} from "@/server/api-auth";
 
-export async function GET(request: Request) {
-  void request;
+async function disabled() {
+  const auth = await requireSessionUser();
+  if ("error" in auth) return auth.error;
   return NextResponse.json({message: "Endpoint deshabilitado: roles/permisos locales fueron retirados"}, {status: 410});
 }
 
-export async function POST(request: Request) {
-  void request;
-  return NextResponse.json({message: "Endpoint deshabilitado: roles/permisos locales fueron retirados"}, {status: 410});
-}
-
-export async function DELETE(request: Request) {
-  void request;
-  return NextResponse.json({message: "Endpoint deshabilitado: roles/permisos locales fueron retirados"}, {status: 410});
-}
+export {disabled as GET, disabled as POST, disabled as DELETE};
