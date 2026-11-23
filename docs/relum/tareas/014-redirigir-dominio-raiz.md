@@ -43,3 +43,7 @@ Verificación del orquestador (2026-11-23): diff revisado (solo `redirects()` en
 y parámetros); `tsc --noEmit` sin errores, lint sin errores, `next build` exitoso.
 Infraestructura hecha por el orquestador: registro A `relum` en Hostinger, dominio `relum.datafy.site` en
 Coolify, `NEXTAUTH_URL=https://relum.datafy.site`, origen y retorno en Google y retorno en Microsoft.
+
+Producción (9abafc9, 2026-11-23): `datafy.site/es` y `www.datafy.site/es?x=1` → 307 a `relum.datafy.site`
+con la misma ruta y parámetros; `relum.datafy.site` responde 200 con certificado válido; los retornos de
+NextAuth apuntan a `relum.datafy.site`; el ingreso con Microsoft llega a `/onboarding` (cuenta sin registro).

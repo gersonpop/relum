@@ -64,7 +64,7 @@ Desde el 2026-11-22 el trabajo se reparte así:
 | 011 | Cancelar el registro no guarda nada en Onboarding | Codex | terminada, verificada y en producción | 076994b |
 | 012 | Script: borrar las 12 solicitudes heredadas de FluidSell | Codex (script) + orquestador (ejecución) | ejecutada en producción | ver ESTADO |
 | 013 | Subdominio por empresa | Codex | cancelada: el usuario eligió una sola dirección | — |
-| 014 | `datafy.site` redirige a `relum.datafy.site` | Codex | terminada y verificada; pendiente desplegar | ver ESTADO |
+| 014 | `datafy.site` redirige a `relum.datafy.site` | Codex | terminada, verificada y en producción | 9abafc9 |
 
 ## Lecciones aprendidas
 
