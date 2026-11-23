@@ -18,7 +18,7 @@ Definida por el dueño del producto el 2026-11-22.
 Replicar en Relum las funcionalidades de la aplicación actual hecha en Google Sheets, para que los
 usuarios puedan migrar sin perder nada:
 
-1. Obtener la hoja (y su Apps Script, si tiene) y levantar el inventario de funcionalidades:
+1. ✅ (2026-11-23, `hoja-actual/INVENTARIO.md`) Obtener la hoja y su Apps Script y levantar el inventario de funcionalidades:
    pestañas, campos, fórmulas, validaciones, listas desplegables, formularios, reportes, permisos y
    automatizaciones.
 2. Documentarlo en `docs/relum/hoja-actual/` (inventario + modelo de datos propuesto).

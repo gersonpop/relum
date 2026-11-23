@@ -13,6 +13,7 @@ La base de código es una copia de FluidSell (otro producto del mismo autor). To
 tablas heredadas (empresas, usuarios, roles, cargos, módulos). Lo propio de mantenimiento está por construir.
 
 - Estrategia de producto (qué es gratis y qué se cobra): `docs/relum/ESTRATEGIA.md`
+- Funcionalidad de la hoja de Google Sheets que Relum reemplaza: `docs/relum/hoja-actual/INVENTARIO.md`
 - Estado actual, infraestructura y pendientes: `docs/relum/ESTADO.md`
 - Cómo se reparte el trabajo entre agentes: `docs/relum/ORQUESTACION.md`
 - Registro de tareas delegadas: `docs/relum/tareas/`
