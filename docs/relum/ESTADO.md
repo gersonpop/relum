@@ -26,7 +26,7 @@
 ### Inicio de sesión
 
 - **Google:** cliente OAuth "fluidsell" del proyecto GCP `agrotrack-436721` (compartido con FluidSell); tiene origen y retorno de `datafy.site`.
-- **Microsoft:** app "Relum" en Microsoft Entra (cuenta personal del autor), multiinquilino + cuentas
+- **Microsoft:** app "Relum" en Microsoft Entra (secreto «datafy» vigente desde 2026-11-23; el secreto viejo «Relum» se puede borrar) (cuenta personal del autor), multiinquilino + cuentas
   personales, notificaciones opcionales `email` y `xms_edov`. El secreto vence en 24 meses.
   Cuentas de empresa de otras organizaciones necesitan verificación de editor o aprobación de su administrador.
 - **Facebook / LinkedIn:** heredados de FluidSell.
@@ -79,4 +79,7 @@ Prioridad media
 Prioridad baja
 - [ ] Decidir si el repositorio de GitHub debe ser privado (requiere GitHub App en Coolify).
 - [ ] Despliegue automático en cada push a `main`.
-- [ ] Limpiar datos de prueba heredados (empresas Alfa/Beta/Gamma, usuarios de prueba).
+- [x] Usuarios de prueba borrados (2026-11-23): quedó solo `gersonpop1@gmail.com` (SU). Copia previa en el
+      contenedor de `relum-db`: `/var/lib/postgresql/data/respaldo-antes-borrar-usuarios-20261123.dump`
+      (formato `pg_dump -Fc`; restaurar con `pg_restore`).
+- [ ] Limpiar el resto de datos heredados: empresas Alfa/Beta/Gamma y 14 solicitudes de registro (`Onboarding`).
