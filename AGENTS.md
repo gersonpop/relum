@@ -12,6 +12,7 @@ mantenimiento). El enfoque es "la IA propone, el usuario decide".
 La base de código es una copia de FluidSell (otro producto del mismo autor). Todavía quedan pantallas y
 tablas heredadas (empresas, usuarios, roles, cargos, módulos). Lo propio de mantenimiento está por construir.
 
+- Estrategia de producto (qué es gratis y qué se cobra): `docs/relum/ESTRATEGIA.md`
 - Estado actual, infraestructura y pendientes: `docs/relum/ESTADO.md`
 - Cómo se reparte el trabajo entre agentes: `docs/relum/ORQUESTACION.md`
 - Registro de tareas delegadas: `docs/relum/tareas/`
