@@ -1,0 +1,70 @@
+# Estado de Relum
+
+Última actualización: 2026-11-22.
+
+## En producción
+
+| Pieza | Detalle |
+|---|---|
+| URL | https://relum.187.53.107.149.sslip.io (temporal, HTTPS con Let's Encrypt) |
+| Código | GitHub `gersonpop/relum` (público), rama `main` |
+| Servidor | VPS Hostinger KVM 4, Ubuntu 24.04, IP 187.53.107.149 |
+| Orquestador de despliegue | Coolify (`http://187.53.107.149:8000`), proyecto **Relum** → entorno `production` |
+| App | recurso **relum-web**: build con `web/Dockerfile` (base `/web`), puerto 3000 |
+| Base de datos | recurso **relum-db**: PostgreSQL 17, base/usuario `relum`, acceso **privado** (solo red interna) |
+| Fotos subidas | volumen `relum-uploads` montado en `/app/data`; se sirven por `/api/v1/files/<nombre>` |
+| Despliegue | manual: botón **Deploy/Redeploy** en Coolify (toma el último commit de `main`) |
+
+### Variables de entorno (en Coolify, nunca en git)
+
+`NEXTAUTH_URL`, `DATABASE_URL`, `AUTH_SECRET`, `NEXTAUTH_SECRET`, `AUTH_GOOGLE_ID/SECRET`,
+`AUTH_FACEBOOK_ID/SECRET`, `AUTH_LINKEDIN_ID/SECRET`, `AUTH_MICROSOFT_ID/SECRET`.
+`UPLOADS_DIR` lo define el Dockerfile. `DEV_FAKE_SESSION=true` solo en desarrollo local.
+
+### Inicio de sesión
+
+- **Google:** cliente OAuth "fluidsell" del proyecto GCP `agrotrack-436721` (compartido con FluidSell).
+- **Microsoft:** app "Relum" en Microsoft Entra (cuenta personal del autor), multiinquilino + cuentas
+  personales, notificaciones opcionales `email` y `xms_edov`. El secreto vence en 24 meses.
+  Cuentas de empresa de otras organizaciones necesitan verificación de editor o aprobación de su administrador.
+- **Facebook / LinkedIn:** heredados de FluidSell.
+- Reglas de seguridad: el correo de Microsoft solo se acepta si está verificado; los permisos solo se
+  cargan si el usuario entra con la misma red con la que se registró.
+
+### Base de datos
+
+Copia del esquema y datos de FluidSell (2026-11-22): 31 tablas, catálogos de países/departamentos/ciudades,
+módulos del menú, roles, usuarios y empresas de prueba. La empresa `900000000` se llama **Relum**.
+Los permisos (`UserRole.hash_permission`) están cifrados con `AUTH_SECRET`: si se cambia ese valor hay que
+volver a cifrarlos.
+
+## Historial de cambios relevantes
+
+| Commit | Cambio |
+|---|---|
+| 6e167a2 | Copia base de FluidSell |
+| 8ce8684 | Marca Relum, textos del login para mantenimiento, tildes y jerga corregidas |
+| afe1d5d | Seguridad: la API identifica al usuario por la sesión, no por cabeceras |
+| 1bbb9f0 | Dockerfile, build standalone, fotos en volumen persistente |
+| 278db3f | `package-lock.json` sincronizado para npm 10 |
+| 40ee594 | Inicio de sesión con Microsoft |
+
+## Pendientes (backlog)
+
+Prioridad alta
+- [ ] Copias de seguridad programadas de `relum-db` en Coolify.
+- [x] Healthcheck de la app: `GET /api/health` + `HEALTHCHECK` en el Dockerfile (tarea 001).
+- [ ] Módulos propios de mantenimiento: equipos/activos, órdenes de trabajo, planes preventivos, reportes.
+
+Prioridad media
+- [ ] Dominio propio `relum.app` / `relum.co` (comprar, DNS, Coolify, Google y Microsoft).
+- [ ] Mejoras de usabilidad pendientes de la auditoría inicial: registro en pasos con etiquetas,
+      acciones de tablas con texto, menú móvil, diálogos accesibles (Esc, foco), confirmaciones.
+- [ ] Reemplazar imágenes de fondo heredadas de FluidSell en login y registro.
+- [ ] Cliente OAuth de Google propio para Relum (hoy usa el de FluidSell).
+- [ ] Rotar `AUTH_SECRET` (re-cifrando permisos) para separar del todo a Relum de FluidSell.
+
+Prioridad baja
+- [ ] Decidir si el repositorio de GitHub debe ser privado (requiere GitHub App en Coolify).
+- [ ] Despliegue automático en cada push a `main`.
+- [ ] Limpiar datos de prueba heredados (empresas Alfa/Beta/Gamma, usuarios de prueba).
