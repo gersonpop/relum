@@ -69,7 +69,8 @@ Prioridad media
 - [x] En celular, Relum se ve como app: barra inferior, pestañas en las secciones, bienvenida a pantalla
       completa e instalable en la pantalla de inicio (tareas 005–007).
 - [ ] En celular, las tablas de administración se desplazan de lado; pasarlas a tarjetas.
-- [ ] Logo propio de Relum (hoy se usa el heredado de FluidSell).
+- [x] Logo propio de Relum (variante «Esencial»: renglones + llave con punta de lápiz). Fuentes en
+      `web/public/brand/`; iconos en `web/public/icons/`, `web/public/logo_icon.png` y `web/src/app/favicon.ico`.
 - [ ] Probar el registro en pasos con una cuenta nueva en producción.
 - [ ] Reemplazar imágenes de fondo heredadas de FluidSell en login y registro.
 - [ ] Cliente OAuth de Google propio para Relum (hoy usa el de FluidSell).
