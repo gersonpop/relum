@@ -1,0 +1,5 @@
+Una solicitud fallida o cancelada ya no bloquea el registro con otra red. El registro prioriza las solicitudes pendientes sobre las activas y elige la más reciente cuando hay varias del mismo estado. Al enviar el formulario, reutiliza la solicitud de la misma empresa y, si otra solicitud fallida ocupa el documento, lo libera y conserva su valor en el historial. [Lógica de registro](/Users/gersonpop/Documents/Proyectos/Proyecto%20Gestion%20OT/web/src/server/auth/onboarding.ts)
+
+El modal indica con qué red volver a entrar y ofrece «Cerrar sesión y volver al inicio» en español, inglés y francés. [Modal de registro](/Users/gersonpop/Documents/Proyectos/Proyecto%20Gestion%20OT/web/src/app/%5Blocale%5D/onboarding/OnboardingClient.tsx)
+
+Pasaron TypeScript, `git diff --check` y las simulaciones de resolución, envío y cancelación. ESLint no encontró incidencias nuevas. Queda pendiente probar el flujo con OAuth y la concurrencia en PostgreSQL. No hice commit, no ejecuté el build ni usé la base de producción.

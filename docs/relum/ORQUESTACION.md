@@ -60,6 +60,7 @@ Desde el 2026-11-22 el trabajo se reparte así:
 | 007 | Inicio de sesión como app móvil | Codex | terminada, verificada y en producción | a8e9d88 |
 | 008 | Acceso solo para usuarios registrados y aprobados | Codex | terminada, verificada y en producción | 42f8d5b |
 | 009 | Script: borrar solicitudes de Edwin Saldaña | Codex (script) + orquestador (ejecución) | ejecutada en producción | ver ESTADO |
+| 010 | Solicitudes fallidas no bloquean registrarse con otra red | Codex | terminada y verificada | ver ESTADO |
 
 ## Lecciones aprendidas
 

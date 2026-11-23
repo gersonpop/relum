@@ -85,6 +85,5 @@ Prioridad baja
       (formato `pg_dump -Fc`; restaurar con `pg_restore`).
 - [x] Solicitudes de «Edwin Saldaña» borradas (tarea 009). Copia previa:
       `/var/lib/postgresql/data/respaldo-antes-borrar-edwin-20261123.dump`.
-- [ ] Una solicitud «fallida» heredada (p. ej. Gerson Porras/LinkedIn) bloquea registrarse con otra red
-      («Registro existente»): decidir si las fallidas deben contar como conflicto.
+- [x] Una solicitud «fallida» ya no bloquea registrarse con otra red (tarea 010).
 - [ ] Limpiar el resto de datos heredados: empresas Alfa/Beta/Gamma y 12 solicitudes de registro (`Onboarding`).

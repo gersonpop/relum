@@ -102,6 +102,12 @@
     "saveError": "We couldn’t save your details. Check your connection and try again.",
     "cancel": "Cancel",
     "cancelling": "Cancelling…",
+    "providerConflict": {
+      "title": "Existing registration",
+      "description": "Your email is linked to {provider} in Relum. Sign out and sign back in with {provider}.",
+      "signOut": "Sign out and return to the start",
+      "signingOut": "Signing out…"
+    },
     "fields": {
       "firstName": "First name",
       "lastName": "Last name",

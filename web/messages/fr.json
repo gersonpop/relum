@@ -102,6 +102,12 @@
     "saveError": "Nous n’avons pas pu enregistrer vos informations. Vérifiez votre connexion et réessayez.",
     "cancel": "Annuler",
     "cancelling": "Annulation…",
+    "providerConflict": {
+      "title": "Inscription existante",
+      "description": "Votre adresse e-mail est associée à {provider} dans Relum. Déconnectez-vous, puis reconnectez-vous avec {provider}.",
+      "signOut": "Se déconnecter et revenir à l’accueil",
+      "signingOut": "Déconnexion…"
+    },
     "fields": {
       "firstName": "Prénom",
       "lastName": "Nom",

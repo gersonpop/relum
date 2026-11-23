@@ -37,7 +37,6 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
   const saving = pendingAction !== null;
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [showConflictModal, setShowConflictModal] = useState(!!conflictingProvider);
   const [showDniConflictModal, setShowDniConflictModal] = useState(false);
   const [dniConflictProvider, setDniConflictProvider] = useState<string | null>(null);
   const [step, setStep] = useState(0);
@@ -375,6 +374,14 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
     }
   }
 
+  const conflictingProviderName = conflictingProvider === "google"
+    ? "Google"
+    : conflictingProvider === "facebook"
+    ? "Facebook"
+    : conflictingProvider === "azure-ad"
+    ? "Microsoft"
+    : "LinkedIn";
+
   return (
     <div
       className="relative min-h-screen w-full overflow-y-auto bg-cover bg-center bg-no-repeat py-8 px-4 flex items-center justify-center text-white"
@@ -576,7 +583,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
         </section>
       </main>
 
-      {showConflictModal && conflictingProvider && (
+      {conflictingProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
           <div className="relative w-full max-w-md liquid-card rounded-[2rem] p-6 sm:p-8 text-white">
             <span className="pointer-events-none absolute inset-[1px] rounded-[1.95rem] border-2 border-white/20" />
@@ -589,20 +596,10 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
                 </svg>
               </div>
 
-              <h2 className="text-xl font-bold mb-2">Registro existente</h2>
+              <h2 className="text-xl font-bold mb-2">{t("providerConflict.title")}</h2>
               
               <p className="text-sm text-slate-300 mb-6 leading-relaxed">
-                Tu correo electrónico ya está registrado en Relum con la red social{" "}
-                <span className="font-semibold text-sky-300">
-                  {conflictingProvider === "google"
-                    ? "Google"
-                    : conflictingProvider === "facebook"
-                    ? "Facebook"
-                    : conflictingProvider === "azure-ad"
-                    ? "Microsoft"
-                    : "LinkedIn"}
-                </span>
-                .
+                {t("providerConflict.description", {provider: conflictingProviderName})}
               </p>
 
               <div className="w-full">
@@ -614,7 +611,7 @@ export function OnboardingClient({locale, email, provider, defaultFullName, defa
                   }}
                   className="w-full rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 active:from-cyan-500 active:to-blue-600 px-5 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {saving ? "Procesando..." : "Ir a iniciar sesión"}
+                  {t(saving ? "providerConflict.signingOut" : "providerConflict.signOut")}
                 </button>
               </div>
             </div>

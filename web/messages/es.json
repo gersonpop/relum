@@ -102,6 +102,12 @@
     "saveError": "No pudimos guardar tus datos. Revisa tu conexión e inténtalo de nuevo.",
     "cancel": "Cancelar",
     "cancelling": "Cancelando…",
+    "providerConflict": {
+      "title": "Registro existente",
+      "description": "Tu correo está vinculado a {provider} en Relum. Cierra sesión y vuelve a entrar con {provider}.",
+      "signOut": "Cerrar sesión y volver al inicio",
+      "signingOut": "Cerrando sesión…"
+    },
     "fields": {
       "firstName": "Nombres",
       "lastName": "Apellidos",
