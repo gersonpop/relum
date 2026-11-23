@@ -59,7 +59,20 @@
   },
   "mobileMenu": {
     "open": "Menu",
-    "close": "Close menu"
+    "close": "Close menu",
+    "navigation": "Main navigation",
+    "more": "More",
+    "welcome": "Welcome to Relum",
+    "welcomeHint": "Choose a section in the bottom bar to get started.",
+    "tabs": {
+      "home": "Home",
+      "dashboard": "Dashboard",
+      "companies": "Companies",
+      "users": "Users",
+      "settings": "Settings",
+      "workflow": "Workflows",
+      "pendingUsers": "Requests"
+    }
   },
   "onboardingSteps": {
     "title": "Complete your registration",

@@ -19,14 +19,27 @@ export function LoginShowcase({slides}: LoginShowcaseProps) {
   useEffect(() => {
     if (slides.length < 2) return;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) return;
+    const desktop = window.matchMedia("(min-width: 48rem)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let timer: number | undefined;
 
-    const timer = window.setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % slides.length);
-    }, 5000);
+    function syncTimer() {
+      window.clearInterval(timer);
+      if (!desktop.matches || reducedMotion.matches) return;
 
-    return () => window.clearInterval(timer);
+      timer = window.setInterval(() => {
+        setActiveIndex((prev) => (prev + 1) % slides.length);
+      }, 5000);
+    }
+
+    syncTimer();
+    desktop.addEventListener("change", syncTimer);
+    reducedMotion.addEventListener("change", syncTimer);
+    return () => {
+      window.clearInterval(timer);
+      desktop.removeEventListener("change", syncTimer);
+      reducedMotion.removeEventListener("change", syncTimer);
+    };
   }, [slides.length]);
 
   return (

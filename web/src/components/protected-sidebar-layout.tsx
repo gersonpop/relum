@@ -2,6 +2,7 @@
 
 import { signOut, getSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -9,6 +10,16 @@ import { selectSidebarModulesFromDbRows, type DynamicModuleNav } from "@/lib/sid
 import { getSecureItem, setSecureItem } from "@/lib/secure-store";
 
 type SidebarMode = "compact" | "auto" | "fixed";
+
+const mobileTabLabels = {
+  "/home": "home",
+  "/dashboard": "dashboard",
+  "/companies": "companies",
+  "/users": "users",
+  "/setting": "settings",
+  "/workflow": "workflow",
+  "/pending-users": "pendingUsers",
+} as const;
 
 function isImageIcon(value: string) {
   const icon = value.trim().toLowerCase();
@@ -54,6 +65,7 @@ export function ProtectedSidebarLayout({
   userCargo = null,
   roleScope = null,
   initialModules,
+  title,
   children
 }: ProtectedSidebarLayoutProps) {
   const pathname = usePathname();
@@ -572,6 +584,22 @@ export function ProtectedSidebarLayout({
     });
   }, [dynamicModules]);
 
+  const mobileLinks = !modulesLoading && !modulesError
+    ? sidebarItems.flatMap((group) => group.isSection ? group.children : [group]).filter((item) => item.route)
+    : [];
+  const mobileTabs = mobileLinks.slice(0, 4);
+  const mobileTabRoutes = new Set(mobileTabs.map((item) => item.route));
+  const activeMobileLink = mobileLinks.reduce<DynamicModuleNav | undefined>((active, item) => {
+    const href = `/${locale}${item.route}`;
+    const matches = pathname === href || pathname.startsWith(`${href}/`);
+    return matches && (!active || (item.route?.length ?? 0) > (active.route?.length ?? 0)) ? item : active;
+  }, undefined);
+  const activeMobileHref = activeMobileLink ? `/${locale}${activeMobileLink.route}` : null;
+  const mobileTitle = (pathname === activeMobileHref ? activeMobileLink?.name : title || activeMobileLink?.name)
+    || (pathname === `/${locale}/home` ? mobileMenuText("tabs.home") : "Relum");
+  const moreActive = mobileMenuOpen || (activeMobileLink && !mobileTabRoutes.has(activeMobileLink.route));
+  const mobileTabClass = "flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 text-xs font-medium transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cyan-300";
+
   useEffect(() => {
     if (initialModules !== undefined) {
       setDynamicModules(initialModules);
@@ -670,33 +698,71 @@ export function ProtectedSidebarLayout({
 
   return (
     <main
-      className={`relative flex h-dvh overflow-hidden bg-cover bg-center bg-no-repeat ${isMounted ? "transition-[background-image] duration-500" : ""
+      className={`relative flex h-dvh overflow-hidden bg-cover bg-center bg-no-repeat md:bg-(image:--home-bg) max-md:[--mobile-header:calc(3.5rem+env(safe-area-inset-top))] max-md:[--mobile-tabs:calc(3.75rem+env(safe-area-inset-bottom))] ${isMounted ? "md:transition-[background-image] md:duration-500" : ""
         } ${isNightActive ? "theme-dark-active" : ""
-        }`}
-      style={{ backgroundImage: "var(--home-bg)" }}
+        } ${isNightActive ? "max-md:bg-[#0B192C]" : "max-md:bg-slate-50"}`}
       suppressHydrationWarning
     >
-      <div className="absolute inset-0 bg-white/5" />
+      <div className="absolute inset-0 hidden bg-white/5 md:block" />
 
       <header
         inert={mobileMenuOpen}
-        className="fixed inset-x-0 top-0 z-20 flex h-14 items-center justify-between border-b border-white/15 bg-slate-950 px-4 text-white md:hidden"
+        className="fixed inset-x-0 top-0 z-20 flex h-(--mobile-header) items-center border-b border-white/15 bg-slate-950 pt-[env(safe-area-inset-top)] pr-[max(1rem,env(safe-area-inset-right))] pl-[max(1rem,env(safe-area-inset-left))] text-white md:hidden"
       >
-        <span className="text-lg font-semibold">Relum</span>
+        <p className="truncate text-lg font-semibold">{mobileTitle}</p>
+      </header>
+
+      <nav
+        aria-label={mobileMenuText("navigation")}
+        inert={mobileMenuOpen}
+        className="fixed inset-x-0 bottom-0 z-20 flex h-(--mobile-tabs) gap-1 border-t border-white/15 bg-slate-950 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] pr-[max(0.25rem,env(safe-area-inset-right))] pl-[max(0.25rem,env(safe-area-inset-left))] md:hidden"
+      >
+        {mobileTabs.map((item) => {
+          const href = `/${locale}${item.route}`;
+          const labelKey = mobileTabLabels[item.route as keyof typeof mobileTabLabels];
+          const active = item === activeMobileLink;
+          const textIcon = item.icon && normalizeTextIcon(item.icon);
+          return (
+            <Link
+              key={item.id}
+              href={href}
+              title={item.name}
+              aria-current={active ? (pathname === href ? "page" : "location") : undefined}
+              className={`${mobileTabClass} ${active ? "bg-cyan-300/15 text-cyan-100" : "text-slate-300 hover:bg-white/10"}`}
+            >
+              <span aria-hidden="true" className="grid size-5 place-items-center text-lg leading-none">
+                {item.icon && isImageIcon(item.icon) ? (
+                  <Image src={item.icon.trim()} alt="" width={20} height={20} unoptimized className="size-5 object-contain" />
+                ) : textIcon && textIcon !== "◦" ? (
+                  textIcon
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="size-5">
+                    <rect x="4" y="4" width="16" height="16" rx="4" />
+                    <path d="M8 10h8m-8 4h5" strokeLinecap="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="w-full truncate text-center">{labelKey ? mobileMenuText(`tabs.${labelKey}`) : item.name}</span>
+            </Link>
+          );
+        })}
         <button
           ref={menuButtonRef}
           type="button"
           aria-expanded={mobileMenuOpen}
           aria-controls={sidebarId}
           onClick={() => setMobileMenuPath(pathname)}
-          className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-cyan-300"
+          aria-haspopup="dialog"
+          className={`${mobileTabClass} ${moreActive ? "bg-cyan-300/15 text-cyan-100" : "text-slate-300 hover:bg-white/10"}`}
         >
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="size-5">
-            <path d="M4 6h16M4 12h16M4 18h16" />
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className="size-5">
+            <circle cx="5" cy="12" r="1.75" />
+            <circle cx="12" cy="12" r="1.75" />
+            <circle cx="19" cy="12" r="1.75" />
           </svg>
-          {mobileMenuText("open")}
+          {mobileMenuText("more")}
         </button>
-      </header>
+      </nav>
 
       {mobileMenuOpen && (
         <div
@@ -729,7 +795,7 @@ export function ProtectedSidebarLayout({
         suppressHydrationWarning
       >
         <div
-          className={`h-full ${compact ? "p-2" : "p-2"} ${isSidebarDark
+          className={`h-full max-md:pt-[calc(0.5rem+env(safe-area-inset-top))] max-md:pb-[calc(0.5rem+env(safe-area-inset-bottom))] max-md:pl-[max(0.5rem,env(safe-area-inset-left))] ${compact ? "p-2" : "p-2"} ${isSidebarDark
             ? "bg-gradient-to-b from-[#0B192C]/90 via-[#1E3E62]/70 to-[#0A0F1D]/95"
             : "bg-gradient-to-b from-sky-700/45 via-indigo-700/30 to-slate-900/56"
             } backdrop-blur-xl ${isMounted ? "transition-all duration-500" : ""}`}
@@ -880,7 +946,7 @@ export function ProtectedSidebarLayout({
                         if (!hasChildren) {
                           // Rule: -section sin hijo, =>titulo
                           return (
-                            <div key={group.id} className="px-2 pb-1 pt-4 select-none">
+                            <div key={group.id} className="px-2 pb-1 pt-4 select-none max-md:hidden">
                               {compact ? (
                                 <div className="mx-auto mb-3 h-px w-12 bg-white/10" />
                               ) : (
@@ -894,9 +960,10 @@ export function ProtectedSidebarLayout({
                           // Rule: -section con hijos, dropdown
                           const isCollapsed = collapsedSections[group.id] === true;
                           const hasActiveChild = group.children.some((child) => pathname === `/${locale}${child.route}`);
+                          const hasMoreChildren = group.children.some((child) => !mobileTabRoutes.has(child.route));
 
                           return (
-                            <div key={group.id} className="space-y-1">
+                            <div key={group.id} className={`space-y-1 ${hasMoreChildren ? "" : "max-md:hidden"}`}>
                               {compact ? <div className="mx-auto mb-3 h-px w-12 bg-white/10" /> : null}
 
                               <div
@@ -904,7 +971,7 @@ export function ProtectedSidebarLayout({
                                   ...prev,
                                   [group.id]: !prev[group.id]
                                 }))}
-                                className={`group flex w-full items-center text-left text-white/90 transition duration-300 select-none cursor-pointer ${hasActiveChild
+                                className={`group flex w-full items-center text-left text-white/90 transition duration-300 select-none cursor-pointer max-md:min-h-11 ${hasActiveChild
                                     ? expanded
                                       ? "gap-3 rounded-xl border border-cyan-300/30 bg-white/8 px-2 py-2"
                                       : "justify-center rounded-lg bg-white/10 px-0 py-2.5"
@@ -941,7 +1008,8 @@ export function ProtectedSidebarLayout({
                                   <Link
                                     key={href}
                                     href={href}
-                                    className={`group flex w-full items-center text-left text-white/90 transition duration-300 ${expanded ? "pl-6" : ""
+                                    onClick={() => { if (mobileMenuOpen) setMobileMenuPath(null); }}
+                                    className={`group flex w-full items-center text-left text-white/90 transition duration-300 max-md:min-h-11 ${mobileTabRoutes.has(child.route) ? "max-md:hidden" : ""} ${expanded ? "pl-6" : ""
                                       } ${isActive
                                         ? expanded
                                           ? "gap-3 rounded-xl border border-cyan-300/40 bg-cyan-300/15 px-2 py-2"
@@ -985,7 +1053,8 @@ export function ProtectedSidebarLayout({
                         <Link
                           key={href}
                           href={href}
-                          className={`group flex w-full items-center text-left text-white/90 transition duration-300 ${isActive
+                          onClick={() => { if (mobileMenuOpen) setMobileMenuPath(null); }}
+                          className={`group flex w-full items-center text-left text-white/90 transition duration-300 max-md:min-h-11 ${mobileTabRoutes.has(group.route) ? "max-md:hidden" : ""} ${isActive
                             ? expanded
                               ? "gap-3 rounded-xl border border-cyan-300/40 bg-cyan-300/15 px-2 py-2"
                               : "justify-center rounded-lg bg-cyan-300/20 px-0 py-2.5 text-cyan-100"
@@ -1169,22 +1238,28 @@ export function ProtectedSidebarLayout({
         </div>
       </aside>
 
-      <section inert={mobileMenuOpen} className="relative z-10 min-w-0 flex-1 p-2 pt-16 md:p-2">
+      <section inert={mobileMenuOpen} className="relative z-10 min-w-0 flex-1 max-md:pt-(--mobile-header) max-md:pb-(--mobile-tabs) max-md:pr-[env(safe-area-inset-right)] max-md:pl-[env(safe-area-inset-left)] md:p-2">
         <div
           id="contentSidebar"
-          className={`h-full overflow-hidden rounded-3xl p-2 backdrop-blur-md ${isMounted ? "transition-all duration-500" : ""
+          className={`h-full max-md:overflow-y-auto max-md:overscroll-contain md:overflow-hidden md:rounded-3xl md:border md:p-2 md:backdrop-blur-md ${isMounted ? "md:transition-all md:duration-500" : ""
             } ${isNightActive
-              ? "border border-white/10 bg-[#0B192C]/40 text-slate-100"
-              : "border border-white/20 bg-white/16 text-inherit"
+              ? "text-slate-100 md:border-white/10 md:bg-[#0B192C]/40"
+              : "max-md:text-slate-900 md:border-white/20 md:bg-white/16 md:text-inherit"
             }`}
         >
 
 
           {children ?? (
-            <div className="rounded-2xl border border-white/25 bg-slate-950/30 p-6 backdrop-blur-md">
-              <p className="text-lg font-semibold text-white">Bienvenido a Relum</p>
-              <p className="mt-2 text-sm text-white/75">Elige una opción del menú de la izquierda para empezar.</p>
-            </div>
+            <>
+              <div className="p-6 md:hidden">
+                <p className="text-lg font-semibold">{mobileMenuText("welcome")}</p>
+                <p className="mt-2 text-sm text-slate-600">{mobileMenuText("welcomeHint")}</p>
+              </div>
+              <div className="hidden rounded-2xl border border-white/25 bg-slate-950/30 p-6 backdrop-blur-md md:block">
+                <p className="text-lg font-semibold text-white">Bienvenido a Relum</p>
+                <p className="mt-2 text-sm text-white/75">Elige una opción del menú de la izquierda para empezar.</p>
+              </div>
+            </>
           )}
         </div>
       </section>

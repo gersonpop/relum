@@ -1,0 +1,5 @@
+Implementé la bienvenida móvil de Relum para pantallas de menos de 768 px. Tiene fondo azul de pantalla completa, logo, selector de idioma arriba y botones de acceso de 48 px como mínimo al pie. El carrusel queda reservado para escritorio.
+
+Solo edité [page.tsx](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/app/[locale]/page.tsx>), [login-showcase.tsx](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/components/login-showcase.tsx>) y [social-auth-buttons.tsx](</Users/gersonpop/Documents/Proyectos/Proyecto Gestion OT/web/src/components/social-auth-buttons.tsx>).
+
+Pasaron TypeScript, ESLint en los tres archivos y la validación de los JSON de traducción. Quedó pendiente comprobar en navegador que a 375 × 667 px todos los botones se ven sin desplazarse, porque el entorno bloqueó el acceso a Chrome. No ejecuté el build ni hice commit.

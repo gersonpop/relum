@@ -24,7 +24,7 @@ export function SocialAuthButtons({
   const callbackUrl = `/${locale}/home`;
 
   return (
-    <div className="mt-5 space-y-3 lg:mt-6 lg:space-y-4">
+    <div className="space-y-2.5 max-md:[&_button]:min-h-12 max-md:[&_button]:text-base max-md:[&_button]:motion-reduce:transition-none md:mt-5 md:space-y-3 lg:mt-6 lg:space-y-4">
       <button
         type="button"
         onClick={() => signIn("google", {callbackUrl})}

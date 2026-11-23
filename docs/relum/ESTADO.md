@@ -65,8 +65,10 @@ Prioridad media
 - [ ] Facebook y LinkedIn: agregar `https://datafy.site/api/auth/callback/{facebook,linkedin}` en sus apps (heredadas de FluidSell) o quitar esos botones.
 - [x] Mejoras de usabilidad de la auditoría inicial: registro en pasos con etiquetas, acciones de tablas
       con texto, menú móvil, diálogos accesibles (Esc, foco), confirmaciones (tareas 002–004).
-- [ ] En celular, las secciones con submenú (Usuarios, Empresa, Configuración) esconden el contenido
-      debajo del submenú.
+- [x] En celular, Relum se ve como app: barra inferior, pestañas en las secciones, bienvenida a pantalla
+      completa e instalable en la pantalla de inicio (tareas 005–007).
+- [ ] En celular, las tablas de administración se desplazan de lado; pasarlas a tarjetas.
+- [ ] Logo propio de Relum (hoy se usa el heredado de FluidSell).
 - [ ] Probar el registro en pasos con una cuenta nueva en producción.
 - [ ] Reemplazar imágenes de fondo heredadas de FluidSell en login y registro.
 - [ ] Cliente OAuth de Google propio para Relum (hoy usa el de FluidSell).

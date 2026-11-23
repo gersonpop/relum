@@ -59,7 +59,20 @@
   },
   "mobileMenu": {
     "open": "Menu",
-    "close": "Fermer le menu"
+    "close": "Fermer le menu",
+    "navigation": "Navigation principale",
+    "more": "Plus",
+    "welcome": "Bienvenue dans Relum",
+    "welcomeHint": "Choisissez une section dans la barre du bas pour commencer.",
+    "tabs": {
+      "home": "Accueil",
+      "dashboard": "Aperçu",
+      "companies": "Sociétés",
+      "users": "Comptes",
+      "settings": "Réglages",
+      "workflow": "Flux",
+      "pendingUsers": "Demandes"
+    }
   },
   "onboardingSteps": {
     "title": "Terminez votre inscription",

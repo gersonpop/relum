@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,19 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Relum",
   description: "Relum: gestión de mantenimiento, órdenes de trabajo y reportes",
+  appleWebApp: {
+    capable: true,
+    title: "Relum",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    apple: { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+  },
+};
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: "#020617",
 };
 
 export default function RootLayout({

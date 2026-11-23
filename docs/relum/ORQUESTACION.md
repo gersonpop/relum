@@ -51,6 +51,9 @@ Desde el 2026-11-22 el trabajo se reparte así:
 | 002 | Menú móvil | Codex + ajuste del orquestador | terminada, verificada y en producción | d50b34d |
 | 003 | Registro en pasos con etiquetas | Codex | en producción; falta prueba con sesión real | d50b34d |
 | 004 | Diálogos accesibles, confirmaciones y acciones con texto | Codex | terminada, verificada y en producción | d50b34d |
+| 005 | Armazón de app móvil (barra inferior, PWA) | Codex | terminada y verificada | ver ESTADO |
+| 006 | Secciones con pestañas en el celular | Codex + ajustes del orquestador | terminada y verificada | ver ESTADO |
+| 007 | Inicio de sesión como app móvil | Codex | terminada y verificada | ver ESTADO |
 
 ## Lecciones aprendidas
 
